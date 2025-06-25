@@ -1,0 +1,58 @@
+[project]
+name = "lmlog"
+version = "0.2.0"
+description = "LLM-optimized logging library for Python applications"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "msgspec>=0.18.0",
+    "orjson>=3.9.0",
+]
+license = {text = "MIT"}
+authors = [
+    {name = "LMLog Team", email = "team@lmlog.dev"},
+]
+keywords = ["logging", "llm", "debugging", "structured", "json"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Logging",
+]
+
+[project.urls]
+Homepage = "https://github.com/username/lmlog"
+Documentation = "https://github.com/username/lmlog#readme"
+Repository = "https://github.com/username/lmlog.git"
+Issues = "https://github.com/username/lmlog/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "pyrefly>=0.21.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
