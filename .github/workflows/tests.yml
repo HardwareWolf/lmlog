@@ -33,7 +33,7 @@ jobs:
       run: black --check src tests main.py
     
     - name: Type check with pyrefly
-      run: pyrefly src
+      run: pyrefly check src
     
     - name: Test with pytest
       run: pytest tests --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
