@@ -1,10 +1,13 @@
 name: Tests
 
+permissions:
+  contents: read
+
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   test:
@@ -15,35 +18,35 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    
-    - name: Lint with ruff
-      run: ruff check src tests
-    
-    - name: Format check with black
-      run: black --check src tests main.py
-    
-    - name: Type check with pyrefly
-      run: pyrefly check src
-    
-    - name: Test with pytest
-      run: pytest tests --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
-    
-    - name: Upload coverage to Codecov
-      if: matrix.python-version == '3.11'
-      uses: codecov/codecov-action@v3
-      continue-on-error: true
-      with:
-        file: ./coverage.xml
-        token: ${{ secrets.CODECOV_TOKEN }}
-        fail_ci_if_error: false
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: ruff check src tests
+
+      - name: Format check with black
+        run: black --check src tests main.py
+
+      - name: Type check with pyrefly
+        run: pyrefly check src
+
+      - name: Test with pytest
+        run: pytest tests --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        continue-on-error: true
+        with:
+          file: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
