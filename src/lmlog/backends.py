@@ -42,6 +42,17 @@ class FileBackend:
         async_writes: bool = True,
         buffer_size: int = 8192,
     ):
+        """
+        Initialize the file backend.
+
+        Args:
+            file_path (str or Path): Path to the log file.
+            encoder (str): JSON encoder to use ('orjson' or 'msgspec').
+            async_writes (bool): Whether to use async writes with ThreadPoolExecutor.
+            buffer_size (int): Buffer size for file writes.
+        Raises:
+            ValueError: If an unknown encoder is specified.
+        """
         self.file_path = Path(file_path)
         self.async_writes = async_writes
         self.buffer_size = buffer_size
