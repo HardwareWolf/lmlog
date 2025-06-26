@@ -67,7 +67,13 @@ class FileBackend:
             raise ValueError(f"Unknown encoder: {encoder}")
 
     def write(self, event: Dict[str, Any]) -> None:
-        """Write event to file."""
+        """Write event to file.
+
+        Args:
+            event (Dict[str, Any]): The event data to write.
+        Raises:
+            RuntimeError: If async writes are enabled but no executor is set.
+        """
         if self.async_writes and self._executor:
             self._executor.submit(self._write_sync, event)
         else:
