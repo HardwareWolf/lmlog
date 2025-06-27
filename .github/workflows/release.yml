@@ -103,10 +103,10 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Get version from commit
+      - name: Get version from pyproject.toml
         id: version
         run: |
-          VERSION=$(git log -1 --pretty=%B | grep -oP 'v\d+\.\d+\.\d+' || echo "v0.0.0")
+          VERSION="v$(grep -oP '(?<=version = ")[^"]+' pyproject.toml)"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
