@@ -4,6 +4,7 @@ from src.lmlog import LLMLogger, capture_errors, log_performance
 
 
 def main():
+    """Main function to demonstrate the usage of LLMLogger."""
     # Initialize logger
     logger = LLMLogger(output="example_log.jsonl")
     logger.add_global_context(app="example_app", version="1.0.0")
