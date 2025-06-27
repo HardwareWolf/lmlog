@@ -2,8 +2,8 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://github.com/username/lmlog/workflows/Tests/badge.svg)](https://github.com/username/lmlog/actions)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/username/lmlog)
+[![Tests](https://github.com/HardwareWolf/lmlog/workflows/Tests/badge.svg)](https://github.com/HardwareWolf/lmlog/actions)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/HardwareWolf/lmlog)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Type Checker](https://img.shields.io/badge/type%20checker-pyrefly-blue.svg)](https://pyrefly.org)
 
