@@ -43,7 +43,15 @@ class FastJSONEncoder:
 
     @staticmethod
     def encode(obj: Any) -> bytes:
-        """Encode object to JSON bytes."""
+        """Encode object to JSON bytes.
+
+        Args:
+            obj: The object to encode, can be any JSON-serializable type.
+        Returns:
+            bytes: The JSON-encoded bytes representation of the object.
+        Raises:
+            TypeError: If the object cannot be serialized to JSON.
+        """
         return orjson.dumps(obj, option=orjson.OPT_UTC_Z | orjson.OPT_SERIALIZE_NUMPY)
 
     @staticmethod
