@@ -1,14 +1,11 @@
-name: Release
+name: CI
 
 permissions:
   contents: read
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - src/**
-      - pyproject.toml
 
 jobs:
   test:
@@ -51,6 +48,13 @@ jobs:
       - name: Test with pytest
         run: pytest tests --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
 
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
   build:
     needs: test
     runs-on: ubuntu-latest
@@ -71,7 +75,7 @@ jobs:
             ${{ runner.os }}-pip-build-
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
           pip install build
@@ -82,55 +86,11 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ github.sha }}
           path: dist/
+          retention-days: 30
 
-  publish-pypi:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-
-  create-release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Get version from pyproject.toml
-        id: version
+      - name: Verify package integrity
         run: |
-          VERSION="v$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          artifacts: "dist/*"
-          draft: false
-          prerelease: false
-          generateReleaseNotes: true
+          python -m pip install twine
+          python -m twine check dist/*
