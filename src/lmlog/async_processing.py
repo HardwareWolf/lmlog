@@ -10,6 +10,12 @@ from typing import Any, Dict, List, Optional, Protocol, Callable
 from enum import Enum
 
 
+class CircuitBreakerOpenError(Exception):
+    """Raised when circuit breaker is in open state."""
+
+    pass
+
+
 class ProcessingMode(Enum):
     """Processing modes for async handlers."""
 
@@ -126,6 +132,11 @@ class AsyncEventQueue:
         if self._worker_task:
             await self._worker_task
             self._worker_task = None
+
+    @property
+    def is_running(self) -> bool:
+        """Check if the queue is running."""
+        return self._running
 
     async def _worker(self) -> None:
         """Main worker loop for processing events."""
@@ -300,7 +311,7 @@ class CircuitBreaker:
                 self._state = "half_open"
                 self._success_count_in_half_open = 0
             else:
-                raise Exception("Circuit breaker is open")
+                raise CircuitBreakerOpenError("Circuit breaker is open")
 
         try:
             result = await func(*args, **kwargs)

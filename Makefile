@@ -1,4 +1,4 @@
-.PHONY: help install install-dev sync test test-cov lint format check build clean venv add add-dev update
+.PHONY: all help install install-dev sync test test-cov lint format check build clean venv add add-dev update
 
 UV := uv
 PYTHON := $(UV) run python
@@ -10,6 +10,8 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m
+
+all: check
 
 .DEFAULT_GOAL := help
 

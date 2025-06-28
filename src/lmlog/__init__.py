@@ -26,7 +26,7 @@ from .sampling import (
 from .async_processing import AsyncEventQueue, CircuitBreaker, BackpressureManager
 from .otel_integration import extract_trace_context, is_otel_available
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __all__ = [
     "LLMLogger",
     "capture_errors",

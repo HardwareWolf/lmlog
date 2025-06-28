@@ -132,7 +132,7 @@ class StreamBackend:
     def write(self, event: Dict[str, Any]) -> None:
         """Write event to stream."""
         with self._lock:
-            data = self._encoder.encode(event).decode("utf-8")
+            data = self._encoder.encode_str(event)
             self.stream.write(data + "\n")
             if self.auto_flush:
                 self.stream.flush()
@@ -204,7 +204,7 @@ class AsyncFileBackend:
             if event is None:
                 break
 
-            data = self._encoder.encode(event).decode("utf-8")
+            data = self._encoder.encode_str(event)
             file_writer(data + "\n")
 
     def _open_file(self) -> Callable[[str], None]:

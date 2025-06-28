@@ -43,7 +43,7 @@ class TestMissingCoverage:
 
         asyncio.run(processor.process_event({"event": "test"}))
 
-        mock_encoder.encode_str.assert_called()
+        mock_backend.awrite.assert_called()
 
     @pytest.mark.asyncio
     async def test_event_processor_error_handling(self):
@@ -73,7 +73,7 @@ class TestMissingCoverage:
             def get_context(self):
                 return {}
 
-        sampler._latency_history = []
+        sampler._events.clear()
         old_prob = sampler.get_current_probability()
         sampler._adjust_probability(5.0)
         assert sampler.get_current_probability() == old_prob
@@ -437,7 +437,7 @@ class TestMissingCoverage:
 
         sampler = AdaptiveSampler()
         # Test without sufficient data (line 77)
-        sampler._event_times = []
+        sampler._events.clear()
         sampler._adjust_probability(1.0)  # Should handle empty times gracefully
 
     def test_otel_integration_edge_cases(self):

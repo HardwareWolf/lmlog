@@ -118,8 +118,7 @@ class EventProcessor:
         """Write a batch of events."""
         for event in events:
             try:
-                data = self._encoder.encode_str(event)
-                await self._backend.write(data)
+                await self._backend.awrite(event)
                 self._metric_generator.generate_from_event(event)
             except Exception:
                 continue
@@ -291,7 +290,8 @@ class LLMLogger:
         decision = self._sampler.should_sample(sampling_context)
 
         if not decision.should_sample:
-            self._stats["events_sampled_out"] += 1
+            with self._lock:
+                self._stats["events_sampled_out"] += 1
 
         return decision.should_sample
 
@@ -342,29 +342,30 @@ class LLMLogger:
         event.update(kwargs)
 
         self._write_event(event)
-        self._stats["events_logged"] += 1
+        with self._lock:
+            self._stats["events_logged"] += 1
 
     def _write_event(self, event: Dict[str, Any]) -> None:
         """Write event using buffering, async queue, or direct backend."""
-        if self._buffer_size > 0:
-            self._buffer.append(event.copy())
+        if self._buffer_size > 0 and not self._auto_flush:
+            with self._lock:
+                self._buffer.append(event.copy())
             if len(self._buffer) >= self._buffer_size:
-                self._flush_buffer_to_backend()
-            elif self._auto_flush:
                 self._flush_buffer_to_backend()
         else:
             if self._async_queue:
                 self._ensure_async_queue_started()
                 success = self._async_queue.put_nowait(event)
                 if not success:
-                    self._stats["async_queue_errors"] += 1
+                    with self._lock:
+                        self._stats["async_queue_errors"] += 1
                     self._write_event_sync(event)
             else:
                 self._write_event_sync(event)
 
     def _ensure_async_queue_started(self) -> None:
         """Start async queue if not already started."""
-        if self._async_queue and not self._async_queue._running:
+        if self._async_queue and not self._async_queue.is_running:
             try:
                 import asyncio
 
@@ -382,16 +383,19 @@ class LLMLogger:
 
     def _flush_buffer_to_backend(self) -> None:
         """Flush buffer contents to backend."""
-        for buffered_event in self._buffer:
+        with self._lock:
+            buffer_copy = self._buffer.copy()
+            self._buffer.clear()
+        for buffered_event in buffer_copy:
             if self._async_queue:
                 self._ensure_async_queue_started()
                 success = self._async_queue.put_nowait(buffered_event)
                 if not success:
-                    self._stats["async_queue_errors"] += 1
+                    with self._lock:
+                        self._stats["async_queue_errors"] += 1
                     self._backend.write(buffered_event)
             else:
                 self._backend.write(buffered_event)
-        self._buffer.clear()
 
     async def alog_event(
         self,
@@ -440,11 +444,14 @@ class LLMLogger:
         event.update(kwargs)
 
         if self._async_queue:
+            if not self._async_queue.is_running:
+                await self._async_queue.start()
             await self._async_queue.put(event)
         else:
             await self._write_event_async(event)
 
-        self._stats["events_logged"] += 1
+        with self._lock:
+            self._stats["events_logged"] += 1
 
     async def _write_event_async(self, event: Dict[str, Any]) -> None:
         """Write event asynchronously."""
@@ -601,7 +608,8 @@ class LLMLogger:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get logger statistics."""
-        stats: Dict[str, Any] = self._stats.copy()
+        with self._lock:
+            stats: Dict[str, Any] = self._stats.copy()
         stats["event_pool_size"] = self._event_pool.size()
         stats["string_pool_size"] = self._string_pool.size()
         stats["caller_cache_info"] = self._get_caller_info_cached.cache_info()._asdict()
@@ -637,7 +645,8 @@ class LLMLogger:
     @property
     def global_context(self) -> Dict[str, Any]:
         """Global context for all events."""
-        return self._global_context.copy()
+        with self._lock:
+            return self._global_context.copy()
 
     @property
     def buffer_size(self) -> int:
@@ -651,29 +660,35 @@ class LLMLogger:
 
     def get_buffer_size(self) -> int:
         """Get current buffer size."""
-        return len(self._buffer)
+        with self._lock:
+            return len(self._buffer)
 
     def flush_buffer(self) -> None:
         """Flush the buffer."""
-        if not self._buffer:
-            return
+        with self._lock:
+            if not self._buffer:
+                return
         self._flush_buffer_to_backend()
 
     def clear_buffer(self) -> None:
         """Clear the buffer without writing."""
-        self._buffer.clear()
+        with self._lock:
+            self._buffer.clear()
 
     def add_global_context(self, **kwargs) -> None:
         """Add key-value pairs to global context."""
-        self._global_context.update(kwargs)
+        with self._lock:
+            self._global_context.update(kwargs)
 
     def remove_global_context(self, key: str) -> None:
         """Remove a key from global context."""
-        self._global_context.pop(key, None)
+        with self._lock:
+            self._global_context.pop(key, None)
 
     def clear_global_context(self) -> None:
         """Clear all global context."""
-        self._global_context.clear()
+        with self._lock:
+            self._global_context.clear()
 
     def set_output(self, output: Union[str, Path, TextIO]) -> None:
         """Set new output destination."""
@@ -690,7 +705,3 @@ class LLMLogger:
         """Exit context manager and flush buffer."""
         self.flush_buffer()
         return False
-
-    def __del__(self):
-        """Cleanup when logger is destroyed."""
-        pass

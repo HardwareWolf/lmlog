@@ -6,6 +6,13 @@ from typing import Dict, Any, Optional
 import threading
 from contextlib import contextmanager
 
+try:
+    from importlib.metadata import version
+
+    SDK_VERSION = version("lmlog")
+except ImportError:
+    SDK_VERSION = "unknown"
+
 
 class ContextLocal(threading.local):
     """Thread-local storage with context attribute."""
@@ -74,9 +81,9 @@ class TraceContextExtractor:
                     ),
                     "span_name": getattr(span, "name", ""),
                     "span_kind": (
-                        getattr(getattr(span, "kind", ""), "name", "")
-                        if hasattr(getattr(span, "kind", ""), "name")
-                        else str(getattr(span, "kind", ""))
+                        getattr(span_kind, "name", str(span_kind))
+                        if (span_kind := getattr(span, "kind", None)) is not None
+                        else ""
                     ),
                 }
             )
@@ -312,7 +319,7 @@ class ResourceDetector:
             "service.instance.id": os.getenv("HOSTNAME", platform.node()),
             "telemetry.sdk.name": "lmlog",
             "telemetry.sdk.language": "python",
-            "telemetry.sdk.version": "0.2.1",
+            "telemetry.sdk.version": SDK_VERSION,
             "host.name": platform.node(),
             "host.type": platform.machine(),
             "os.name": platform.system(),

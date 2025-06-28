@@ -57,8 +57,8 @@ class ObjectPool(Generic[T]):
         with self._lock:
             if self._pool:
                 return self._pool.popleft()
+            self._created_count += 1
 
-        self._created_count += 1
         return self._factory()
 
     def release(self, obj: T) -> None:
@@ -77,7 +77,8 @@ class ObjectPool(Generic[T]):
 
     def size(self) -> int:
         """Get current pool size."""
-        return len(self._pool)
+        with self._lock:
+            return len(self._pool)
 
     def created_count(self) -> int:
         """Get total number of objects created."""
@@ -132,7 +133,8 @@ class EventPool:
 
     def size(self) -> int:
         """Get current pool size."""
-        return len(self._pool)
+        with self._lock:
+            return len(self._pool)
 
     def created_count(self) -> int:
         """Get total number of events created."""
@@ -179,7 +181,8 @@ class StringPool:
 
     def size(self) -> int:
         """Get current cache size."""
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)
 
     def clear(self) -> None:
         """Clear the string cache."""
@@ -227,9 +230,7 @@ class BufferPool:
             pool = self._pools[size]
             if pool:
                 buffer = pool.popleft()
-                if len(buffer) > 0:
-                    for i in range(len(buffer)):
-                        buffer[i] = 0
+                buffer[:] = b"\x00" * len(buffer)
                 return buffer
 
         return bytearray(size)

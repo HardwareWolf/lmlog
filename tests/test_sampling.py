@@ -209,15 +209,15 @@ class TestAdaptiveSampler:
         # First, wait 1+ seconds so we can trigger an adjustment
         time.sleep(1.1)
 
-        # Add events just before calling should_sample to simulate high current rate
-        now = time.time()
-        for i in range(10):
-            sampler._events.append(
-                now - 0.1 + i * 0.01
-            )  # 10 events in recent 0.1 seconds
+        # Generate high rate through public API
+        for _ in range(20):  # Generate events above target rate
+            decision = sampler.should_sample(context)
+            if decision.should_sample:
+                time.sleep(0.05)  # Small delay between samples
 
-        # Trigger adjustment
-        sampler.should_sample(context)
+        # Wait for next adjustment cycle
+        time.sleep(0.1)
+        sampler.should_sample(context)  # This should trigger adjustment
 
         # Probability should have decreased due to high rate
         assert sampler.get_current_probability() < 1.0

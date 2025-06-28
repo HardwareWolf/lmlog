@@ -219,6 +219,9 @@ class TestMissingCoverage:
             def encode(self, obj):
                 return json.dumps(obj).encode("utf-8")
 
+            def encode_str(self, obj):
+                return json.dumps(obj)
+
         # Test FileBackend with custom encoder
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             backend = FileBackend(tmp.name, encoder="orjson", async_writes=False)
@@ -256,6 +259,9 @@ class TestMissingCoverage:
         class BasicEncoder:
             def encode(self, obj):
                 return json.dumps(obj).encode("utf-8")
+
+            def encode_str(self, obj):
+                return json.dumps(obj)
 
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             backend = AsyncFileBackend(tmp.name, encoder="orjson")

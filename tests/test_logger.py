@@ -41,15 +41,15 @@ class TestLLMLogger:
             assert stats["events_logged"] == 1
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Async queue processing needs investigation")
     async def test_async_logging(self):
         """Test asynchronous logging."""
         with tempfile.NamedTemporaryFile(suffix=".jsonl") as tmp:
-            logger = LLMLogger(tmp.name, async_processing=True, encoder="msgspec")
-
-            # Start the async queue
-            if logger._async_queue:
-                await logger._async_queue.start()
+            logger = LLMLogger(
+                tmp.name,
+                async_processing=True,
+                encoder="msgspec",
+                sampler=AlwaysSampler(),
+            )
 
             await logger.alog_event(
                 event_type="test_event",
@@ -59,10 +59,17 @@ class TestLLMLogger:
                 context={"key": "value"},
             )
 
-            await asyncio.sleep(0.1)  # Give time for processing
-            await logger.close()
+            # Wait longer for processing and force flush by closing
+            await asyncio.sleep(0.3)  # Give more time for processing
+            await logger.close()  # This should flush any remaining events
+
             stats = logger.get_stats()
             assert stats["events_logged"] == 1
+
+            # Also check if the async queue has stats
+            if logger._async_queue:
+                queue_stats = logger._async_queue.get_stats()
+                assert queue_stats["events_processed"] >= 1
 
     def test_sampling_integration(self):
         """Test sampling integration."""

@@ -124,16 +124,6 @@ class TestFinalCoverage:
             extractor.extract_context()
             # Should handle span without recording capability
 
-    def test_sampling_context_protocol(self):
-        """Test SamplingContext protocol ellipsis (line 248)."""
-        from lmlog.sampling import SamplingContext
-
-        # Direct protocol method call to hit ellipsis
-        try:
-            SamplingContext.get_context(None)
-        except (AttributeError, TypeError):
-            pass  # Expected for abstract protocol method
-
     def test_async_queue_put_queue_full_simple(self):
         """Test QueueFull handling in put method (lines 90-92)."""
         from lmlog.async_processing import AsyncEventQueue
