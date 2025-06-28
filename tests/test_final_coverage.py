@@ -112,7 +112,7 @@ class TestFinalCoverage:
     def test_otel_span_features(self):
         """Test OTEL span feature handling (lines 63-65, 86, 360)."""
         from lmlog.otel_integration import TraceContextExtractor, OTEL_AVAILABLE
-        
+
         if not OTEL_AVAILABLE:
             # Skip test if OTEL not available
             return
