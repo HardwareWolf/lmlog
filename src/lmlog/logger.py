@@ -153,6 +153,7 @@ class LLMLogger:
         "_buffer_size",
         "_auto_flush",
         "_buffer",
+        "_async_processing",
     )
 
     def __init__(
@@ -186,9 +187,12 @@ class LLMLogger:
         self._buffer_size = buffer_size
         self._auto_flush = auto_flush
         self._buffer: List[Dict[str, Any]] = []
+        self._async_processing = async_processing
 
         if isinstance(output, (str, Path)):
-            self._backend: LogBackend = FileBackend(output)
+            self._backend: LogBackend = FileBackend(
+                output, async_writes=async_processing
+            )
         else:
             self._backend = StreamBackend(output)
 
@@ -693,7 +697,7 @@ class LLMLogger:
     def set_output(self, output: Union[str, Path, TextIO]) -> None:
         """Set new output destination."""
         if isinstance(output, (str, Path)):
-            self._backend = FileBackend(output)
+            self._backend = FileBackend(output, async_writes=self._async_processing)
         else:
             self._backend = StreamBackend(output)
 
