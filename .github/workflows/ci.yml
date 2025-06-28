@@ -46,7 +46,7 @@ jobs:
         run: pyrefly check src
 
       - name: Test with pytest
-        run: pytest tests --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
+        run: python -m pytest tests -n auto --cov=src/lmlog --cov-report=xml --cov-report=term-missing --cov-fail-under=95
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
@@ -62,6 +62,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
+        id: python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -70,7 +71,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-build-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-build-py${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-build-
             ${{ runner.os }}-pip-

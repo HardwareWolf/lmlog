@@ -37,6 +37,10 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "pyrefly>=0.21.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist[psutil]>=3.7.0",
 ]
 
 [build-system]
@@ -54,10 +58,3 @@ line-length = 88
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-
-[dependency-groups]
-dev = [
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "pytest-xdist[psutil]>=3.7.0",
-]
