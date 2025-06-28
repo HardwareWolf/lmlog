@@ -8,14 +8,16 @@ from io import StringIO
 
 import pytest
 
-from lmlog import LLMLogger, capture_errors, log_performance, log_calls
+from lmlog import LLMLogger, capture_errors, log_performance, log_calls, AlwaysSampler
 
 
 class TestDecorators:
     def test_capture_errors_decorator(self):
         """Test the capture_errors decorator."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @capture_errors(logger)
         def failing_function():
@@ -28,15 +30,17 @@ class TestDecorators:
         logged_data = json.loads(output.getvalue().strip())
 
         assert logged_data["event_type"] == "exception"
-        assert logged_data["operation"] == "failing_function"
-        assert logged_data["error_info"]["exception_type"] == "ValueError"
-        assert logged_data["error_info"]["message"] == "Test error"
+        assert logged_data["context"]["operation"] == "failing_function"
+        assert logged_data["context"]["exception_type"] == "ValueError"
+        assert logged_data["context"]["exception_message"] == "Test error"
         assert logged_data["context"]["function"] == "failing_function"
 
     def test_capture_errors_with_args(self):
         """Test capture_errors decorator with argument logging."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @capture_errors(logger, include_args=True)
         def failing_function_with_args(arg1, arg2, kwarg1="test"):
@@ -54,7 +58,9 @@ class TestDecorators:
     def test_log_performance_decorator(self):
         """Test the log_performance decorator."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @log_performance(logger, threshold_ms=100)
         def slow_function():
@@ -68,15 +74,17 @@ class TestDecorators:
         logged_data = json.loads(output.getvalue().strip())
 
         assert logged_data["event_type"] == "performance_issue"
-        assert logged_data["operation"] == "slow_function"
-        assert logged_data["performance"]["duration_ms"] >= 100
-        assert logged_data["performance"]["threshold_ms"] == 100
+        assert logged_data["context"]["operation"] == "slow_function"
+        assert logged_data["context"]["duration_ms"] >= 100
+        assert logged_data["context"]["threshold_ms"] == 100
         assert logged_data["context"]["function"] == "slow_function"
 
     def test_log_performance_under_threshold(self):
         """Test log_performance when execution is under threshold."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @log_performance(logger, threshold_ms=1000, log_all=True)
         def fast_function():
@@ -95,7 +103,9 @@ class TestDecorators:
     def test_log_calls_decorator(self):
         """Test the log_calls decorator."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @log_calls(logger, include_args=True, include_result=True)
         def test_function(arg1, kwarg1="default"):
@@ -127,7 +137,9 @@ class TestDecorators:
     def test_log_calls_with_exception(self):
         """Test log_calls decorator when function raises exception."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @log_calls(logger)
         def failing_function():
@@ -156,7 +168,9 @@ class TestDecorators:
     def test_multiple_decorators(self):
         """Test using multiple decorators together."""
         output = StringIO()
-        logger = LLMLogger(output=output)
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
 
         @capture_errors(logger)
         @log_performance(logger, threshold_ms=50)
@@ -172,4 +186,4 @@ class TestDecorators:
 
         # Should log performance issue
         assert logged_data["event_type"] == "performance_issue"
-        assert logged_data["performance"]["duration_ms"] >= 50
+        assert logged_data["context"]["duration_ms"] >= 50
