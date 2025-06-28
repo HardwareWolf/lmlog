@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -58,6 +58,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
+        id: python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -66,7 +67,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-build-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-pip-build-py${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-build-
             ${{ runner.os }}-pip-

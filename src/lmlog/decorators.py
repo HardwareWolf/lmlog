@@ -114,11 +114,14 @@ def log_performance(logger: LLMLogger, threshold_ms: int = 1000, log_all: bool =
                             context=context,
                         )
                     else:
+                        perf_info_context = {
+                            "operation": func.__name__,
+                            "duration_ms": duration_ms,
+                            **context,
+                        }
                         logger.log_event(
                             event_type="performance_info",
-                            operation=func.__name__,
-                            performance={"duration_ms": duration_ms},
-                            context=context,
+                            context=perf_info_context,
                         )
 
                 return result
@@ -148,11 +151,14 @@ def log_performance(logger: LLMLogger, threshold_ms: int = 1000, log_all: bool =
                             context=context,
                         )
                     else:
+                        perf_info_context = {
+                            "operation": func.__name__,
+                            "duration_ms": duration_ms,
+                            **context,
+                        }
                         logger.log_event(
                             event_type="performance_info",
-                            operation=func.__name__,
-                            performance={"duration_ms": duration_ms},
-                            context=context,
+                            context=perf_info_context,
                         )
 
                 return result

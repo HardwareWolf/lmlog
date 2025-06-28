@@ -96,7 +96,6 @@ lint: check-uv
 format: check-uv
 	@echo "$(YELLOW)Formatting code...$(NC)"
 	$(UV) run black $(SRC_DIR) $(TEST_DIR) main.py
-	$(UV) run ruff format $(SRC_DIR) $(TEST_DIR) main.py
 
 # Build package
 build: check-uv

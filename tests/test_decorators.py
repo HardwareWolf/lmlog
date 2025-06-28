@@ -97,8 +97,8 @@ class TestDecorators:
         logged_data = json.loads(output.getvalue().strip())
 
         assert logged_data["event_type"] == "performance_info"
-        assert logged_data["operation"] == "fast_function"
-        assert logged_data["performance"]["duration_ms"] < 1000
+        assert logged_data["context"]["operation"] == "fast_function"
+        assert logged_data["context"]["duration_ms"] < 1000
 
     def test_log_calls_decorator(self):
         """Test the log_calls decorator."""

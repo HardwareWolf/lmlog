@@ -81,8 +81,8 @@ class TraceContextExtractor:
                     ),
                     "span_name": getattr(span, "name", ""),
                     "span_kind": (
-                        getattr(span_kind, "name", str(span_kind))
-                        if (span_kind := getattr(span, "kind", None)) is not None
+                        getattr(kind, "name", str(kind))
+                        if (kind := getattr(span, "kind", None)) is not None
                         else ""
                     ),
                 }

@@ -111,7 +111,7 @@ class TestMissingCoverage:
             # Manually flush to ensure it's written
             logger_no_auto_flush.flush_buffer()
 
-    def test_optimized_logger_edge_cases(self):
+    def test_logger_edge_cases(self):
         """Test edge cases in LLMLogger."""
         output = StringIO()
         logger = LLMLogger(
@@ -147,7 +147,7 @@ class TestMissingCoverage:
         # Should not contain the disabled_test event
         assert "disabled_test" not in content
 
-    def test_optimized_logger_caller_info_edge_cases(self):
+    def test_logger_caller_info_edge_cases(self):
         """Test edge cases in LLMLogger _get_caller_info."""
         logger = LLMLogger(
             output=StringIO(), async_processing=False, sampler=AlwaysSampler()
@@ -159,7 +159,7 @@ class TestMissingCoverage:
         assert caller_info["function"] == "unknown"
         assert caller_info["line"] == 0
 
-    def test_optimized_logger_buffering(self):
+    def test_logger_buffering(self):
         """Test LLMLogger buffering functionality (lines 180-184, 195-202)."""
         output = StringIO()
         # Set buffer_size to 2 to trigger buffering code paths
@@ -283,8 +283,8 @@ class TestMissingCoverage:
                     parsed = json.loads(content)
                     assert parsed == event
 
-    def test_optimized_logger_kwargs_filtering(self):
-        """Test kwargs filtering in optimized logger."""
+    def test_logger_kwargs_filtering(self):
+        """Test kwargs filtering in logger."""
         logger = LLMLogger(
             output=StringIO(), async_processing=False, sampler=AlwaysSampler()
         )
@@ -456,8 +456,8 @@ class TestMissingCoverage:
         content = output.getvalue()
         assert "test" in content
 
-    def test_optimized_logger_context_manager_exception(self):
-        """Test optimized logger context manager exception handling."""
+    def test_logger_context_manager_exception_duplicate(self):
+        """Test logger context manager exception handling."""
         output = StringIO()
 
         try:
@@ -506,8 +506,8 @@ class TestMissingCoverage:
         assert "inside_operation" in lines[1]
         assert "operation_error" in lines[2]
 
-    def test_optimized_logger_operation_context_exception(self):
-        """Test optimized logger operation context with exception."""
+    def test_logger_operation_context_exception_duplicate(self):
+        """Test logger operation context with exception."""
         output = StringIO()
         logger = LLMLogger(
             output=output,
