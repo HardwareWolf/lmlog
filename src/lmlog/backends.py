@@ -3,6 +3,7 @@ High-performance logging backends with modern Python 3.11+ features.
 """
 
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Union, TextIO, Protocol
@@ -240,14 +241,14 @@ class BatchingBackend:
         self.flush_interval = flush_interval
         self._batch: list[Dict[str, Any]] = []
         self._lock = Lock()
-        self._last_flush = asyncio.get_event_loop().time()
+        self._last_flush = time.time()
 
     def write(self, event: Dict[str, Any]) -> None:
         """Add event to batch."""
         with self._lock:
             self._batch.append(event)
 
-            current_time = asyncio.get_event_loop().time()
+            current_time = time.time()
             should_flush = (
                 len(self._batch) >= self.batch_size
                 or (current_time - self._last_flush) >= self.flush_interval
@@ -265,7 +266,7 @@ class BatchingBackend:
             self.backend.write(event)
 
         self._batch.clear()
-        self._last_flush = asyncio.get_event_loop().time()
+        self._last_flush = time.time()
         self.backend.flush()
 
     def flush(self) -> None:

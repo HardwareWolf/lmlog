@@ -386,19 +386,16 @@ class TestMissingCoverage:
 
     def test_logger_async_queue_error_handling(self):
         """Test async queue error handling (lines 357-361)."""
-        from lmlog.async_processing import AsyncEventQueue
-
-        mock_processor = Mock()
-        mock_processor.process_batch = AsyncMock()
 
         logger = LLMLogger(
             output=StringIO(), async_processing=True, sampler=AlwaysSampler()
         )
 
         # Mock a queue that fails put_nowait
-        mock_queue = Mock(spec=AsyncEventQueue)
+        mock_queue = Mock()
         mock_queue._running = False
         mock_queue.put_nowait = Mock(return_value=False)
+        mock_queue.start = Mock(return_value=None)  # Non-async mock
 
         logger._async_queue = mock_queue
 

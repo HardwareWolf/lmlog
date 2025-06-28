@@ -384,6 +384,7 @@ class TestComprehensiveCoverage:
             output=temp_path, async_processing=False, sampler=AlwaysSampler()
         )
         logger.log_event("file_test")
+        logger.flush_buffer()
 
         with open(temp_path, "r") as f:
             logged_data = json.loads(f.read().strip())
