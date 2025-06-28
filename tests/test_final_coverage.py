@@ -111,7 +111,11 @@ class TestFinalCoverage:
 
     def test_otel_span_features(self):
         """Test OTEL span feature handling (lines 63-65, 86, 360)."""
-        from lmlog.otel_integration import TraceContextExtractor
+        from lmlog.otel_integration import TraceContextExtractor, OTEL_AVAILABLE
+        
+        if not OTEL_AVAILABLE:
+            # Skip test if OTEL not available
+            return
 
         extractor = TraceContextExtractor()
 
@@ -119,8 +123,8 @@ class TestFinalCoverage:
         mock_span = Mock()
         mock_span.is_recording.return_value = False
 
-        with patch("lmlog.otel_integration.trace") as mock_trace:
-            mock_trace.get_current_span.return_value = mock_span
+        with patch("opentelemetry.trace.get_current_span") as mock_get_span:
+            mock_get_span.return_value = mock_span
             extractor.extract_context()
             # Should handle span without recording capability
 

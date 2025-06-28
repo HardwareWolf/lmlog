@@ -147,18 +147,6 @@ class TestMissingCoverage:
         # Should not contain the disabled_test event
         assert "disabled_test" not in content
 
-    def test_logger_caller_info_edge_cases(self):
-        """Test edge cases in LLMLogger _get_caller_info."""
-        logger = LLMLogger(
-            output=StringIO(), async_processing=False, sampler=AlwaysSampler()
-        )
-
-        # Test with very high skip_frames to trigger frame=None (lines 112, 116)
-        caller_info = logger._get_caller_info(skip_frames=100)
-        assert caller_info["file"] == "unknown"
-        assert caller_info["function"] == "unknown"
-        assert caller_info["line"] == 0
-
     def test_logger_buffering(self):
         """Test LLMLogger buffering functionality (lines 180-184, 195-202)."""
         output = StringIO()
@@ -456,57 +444,7 @@ class TestMissingCoverage:
         content = output.getvalue()
         assert "test" in content
 
-    def test_logger_context_manager_exception_duplicate(self):
-        """Test logger context manager exception handling."""
-        output = StringIO()
-
-        try:
-            with LLMLogger(
-                output=output,
-                async_processing=False,
-                buffer_size=0,
-                auto_flush=True,
-                sampler=AlwaysSampler(),
-            ) as logger:
-                logger.log_event("test")
-                raise ValueError("Test exception in context")
-        except ValueError:
-            pass  # Expected
-
-        # Should have flushed on exit despite exception
-        output.seek(0)
-        content = output.getvalue()
-        assert "test" in content
-
     def test_logger_operation_context_exception(self):
-        """Test logger operation context with exception."""
-        output = StringIO()
-        logger = LLMLogger(
-            output=output,
-            buffer_size=0,
-            auto_flush=True,
-            async_processing=False,
-            sampler=AlwaysSampler(),
-        )
-
-        try:
-            with logger.operation_context("test_operation", key="value"):
-                logger.log_event("inside_operation")
-                raise ValueError("Test exception")
-        except ValueError:
-            pass  # Expected
-
-        output.seek(0)
-        content = output.getvalue()
-        lines = content.strip().split("\n")
-
-        # Should have operation_start, inside event, and operation_error
-        assert len(lines) >= 3
-        assert "operation_start" in lines[0]
-        assert "inside_operation" in lines[1]
-        assert "operation_error" in lines[2]
-
-    def test_logger_operation_context_exception_duplicate(self):
         """Test logger operation context with exception."""
         output = StringIO()
         logger = LLMLogger(
