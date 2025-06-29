@@ -41,8 +41,7 @@ class FastJSONEncoder:
     - Better memory efficiency
     """
 
-    @staticmethod
-    def encode(obj: Any) -> bytes:
+    def encode(self, obj: Any) -> bytes:
         """Encode object to JSON bytes.
 
         Args:
@@ -54,8 +53,7 @@ class FastJSONEncoder:
         """
         return orjson.dumps(obj, option=orjson.OPT_UTC_Z | orjson.OPT_SERIALIZE_NUMPY)
 
-    @staticmethod
-    def encode_str(obj: Any) -> str:
+    def encode_str(self, obj: Any) -> str:
         """Encode object to JSON string."""
         return orjson.dumps(
             obj, option=orjson.OPT_UTC_Z | orjson.OPT_SERIALIZE_NUMPY

@@ -3,6 +3,7 @@ High-performance logging backends with modern Python 3.11+ features.
 """
 
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Union, TextIO, Protocol
@@ -82,17 +83,17 @@ class FileBackend:
     def _write_sync(self, event: Dict[str, Any]) -> None:
         """Synchronous write implementation."""
         with self._lock:
-            if hasattr(self._encoder, "encode_str"):
-                data = self._encoder.encode_str(event) + "\n"
-            else:
-                import json
-
-                data = json.dumps(event, default=str) + "\n"
-
-            with open(
-                self.file_path, "a", encoding="utf-8", buffering=self.buffer_size
-            ) as f:
+            data = self._encoder.encode(event) + b"\n"
+            with open(self.file_path, "ab", buffering=self.buffer_size) as f:
                 f.write(data)
+
+    async def awrite(self, event: Dict[str, Any]) -> None:
+        """Write event to file asynchronously."""
+        if self.async_writes and self._executor:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(self._executor, self._write_sync, event)
+        else:
+            self._write_sync(event)
 
     def flush(self) -> None:
         """Flush any pending writes."""
@@ -131,16 +132,14 @@ class StreamBackend:
     def write(self, event: Dict[str, Any]) -> None:
         """Write event to stream."""
         with self._lock:
-            if hasattr(self._encoder, "encode_str"):
-                data = self._encoder.encode_str(event)
-            else:
-                import json
-
-                data = json.dumps(event, default=str)
-
+            data = self._encoder.encode_str(event)
             self.stream.write(data + "\n")
             if self.auto_flush:
                 self.stream.flush()
+
+    async def awrite(self, event: Dict[str, Any]) -> None:
+        """Write event to stream asynchronously."""
+        self.write(event)
 
     def flush(self) -> None:
         """Flush stream."""
@@ -190,7 +189,7 @@ class AsyncFileBackend:
         """Stop the async writer task."""
         self._running = False
         if self._task:
-            await self._write_queue.put(None)  # Sentinel to stop
+            await self._write_queue.put(None)
             await self._task
 
     async def write(self, event: Dict[str, Any]) -> None:
@@ -202,17 +201,11 @@ class AsyncFileBackend:
         file_writer = self._open_file()
         while self._running:
             event = await self._write_queue.get()
-            if event is None:  # Sentinel to stop
+            if event is None:
                 break
 
-            if hasattr(self._encoder, "encode_str"):
-                data = self._encoder.encode_str(event) + "\n"
-            else:
-                import json
-
-                data = json.dumps(event, default=str) + "\n"
-
-            file_writer(data)
+            data = self._encoder.encode_str(event)
+            file_writer(data + "\n")
 
     def _open_file(self) -> Callable[[str], None]:
         """Open file for async writing."""
@@ -248,14 +241,14 @@ class BatchingBackend:
         self.flush_interval = flush_interval
         self._batch: list[Dict[str, Any]] = []
         self._lock = Lock()
-        self._last_flush = asyncio.get_event_loop().time()
+        self._last_flush = time.time()
 
     def write(self, event: Dict[str, Any]) -> None:
         """Add event to batch."""
         with self._lock:
             self._batch.append(event)
 
-            current_time = asyncio.get_event_loop().time()
+            current_time = time.time()
             should_flush = (
                 len(self._batch) >= self.batch_size
                 or (current_time - self._last_flush) >= self.flush_interval
@@ -273,7 +266,7 @@ class BatchingBackend:
             self.backend.write(event)
 
         self._batch.clear()
-        self._last_flush = asyncio.get_event_loop().time()
+        self._last_flush = time.time()
         self.backend.flush()
 
     def flush(self) -> None:

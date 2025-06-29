@@ -1,12 +1,13 @@
 [project]
 name = "lmlog"
-version = "0.2.1"
+version = "0.3.0"
 description = "LLM-optimized logging library for Python applications"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "msgspec>=0.18.0",
     "orjson>=3.9.0",
+    "opentelemetry-api>=1.20.0",
 ]
 license = {text = "MIT"}
 authors = [
@@ -33,12 +34,13 @@ Issues = "https://github.com/username/lmlog/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "pyrefly>=0.21.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist[psutil]>=3.7.0",
 ]
 
 [build-system]
