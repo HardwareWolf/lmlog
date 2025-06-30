@@ -187,3 +187,137 @@ class TestDecorators:
         # Should log performance issue
         assert logged_data["event_type"] == "performance_issue"
         assert logged_data["context"]["duration_ms"] >= 50
+
+
+class TestAsyncDecorators:
+    """Test async versions of decorators."""
+
+    @pytest.mark.asyncio
+    async def test_capture_errors_async(self):
+        """Test async capture_errors decorator."""
+        import asyncio
+        from io import StringIO
+        
+        output = StringIO()
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
+
+        @capture_errors(logger, include_args=True, include_traceback=True)
+        async def async_failing_function(x, y=10):
+            await asyncio.sleep(0.01)
+            raise RuntimeError("Async error")
+
+        with pytest.raises(RuntimeError):
+            await async_failing_function(5, y=20)
+
+        output.seek(0)
+        event = json.loads(output.getvalue())
+
+        assert event["event_type"] == "exception"
+        assert event["context"]["function"] == "async_failing_function"
+        assert event["context"]["args_count"] == 1
+        assert event["context"]["kwargs_keys"] == ["y"]
+        assert "traceback" in event["context"]
+
+    @pytest.mark.asyncio
+    async def test_log_performance_async(self):
+        """Test async log_performance decorator."""
+        import asyncio
+        from io import StringIO
+        
+        output = StringIO()
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
+
+        @log_performance(logger, threshold_ms=50, log_all=True)
+        async def async_slow_function(delay=0.1):
+            await asyncio.sleep(delay)
+            return "async result"
+
+        # Test slow execution
+        result = await async_slow_function(0.06)  # 60ms
+        assert result == "async result"
+
+        output.seek(0)
+        lines = output.getvalue().strip().split("\n")
+        event = json.loads(lines[0])
+
+        assert event["event_type"] == "performance_issue"
+        assert event["context"]["operation"] == "async_slow_function"
+        assert event["context"]["duration_ms"] >= 50
+
+        # Test fast execution with log_all
+        output.truncate(0)
+        output.seek(0)
+
+        result = await async_slow_function(0.01)  # 10ms
+
+        output.seek(0)
+        event = json.loads(output.getvalue())
+        assert event["event_type"] == "performance_info"
+        assert event["context"]["duration_ms"] < 50
+
+    @pytest.mark.asyncio
+    async def test_log_calls_async(self):
+        """Test async log_calls decorator."""
+        import asyncio
+        from io import StringIO
+        
+        output = StringIO()
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
+
+        @log_calls(logger, include_args=True, include_result=True)
+        async def async_test_function(x, y=5):
+            await asyncio.sleep(0.01)
+            return [x, y]
+
+        # Test successful execution
+        result = await async_test_function(10, y=20)
+        assert result == [10, 20]
+
+        output.seek(0)
+        lines = output.getvalue().strip().split("\n")
+
+        entry_event = json.loads(lines[0])
+        exit_event = json.loads(lines[1])
+
+        # Check entry
+        assert entry_event["event_type"] == "function_entry"
+        assert entry_event["context"]["args_count"] == 1
+        assert entry_event["context"]["kwargs_keys"] == ["y"]
+
+        # Check exit
+        assert exit_event["event_type"] == "function_exit"
+        assert exit_event["context"]["result_type"] == "list"
+        assert exit_event["context"]["result_length"] == 2
+
+    @pytest.mark.asyncio
+    async def test_log_calls_async_with_exception(self):
+        """Test async log_calls with exception."""
+        import asyncio
+        from io import StringIO
+        
+        output = StringIO()
+        logger = LLMLogger(
+            output=output, async_processing=False, sampler=AlwaysSampler()
+        )
+
+        @log_calls(logger, log_exit=True)
+        async def async_failing_function():
+            await asyncio.sleep(0.01)
+            raise KeyError("Missing key")
+
+        with pytest.raises(KeyError):
+            await async_failing_function()
+
+        output.seek(0)
+        lines = output.getvalue().strip().split("\n")
+
+        exit_event = json.loads(lines[-1])
+        assert exit_event["event_type"] == "function_exit_error"
+        assert exit_event["error_info"]["exception_type"] == "KeyError"
+        assert "Missing key" in exit_event["error_info"]["message"]

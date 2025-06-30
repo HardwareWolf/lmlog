@@ -9,7 +9,7 @@ from pathlib import Path
 from io import StringIO
 import pytest
 
-from lmlog.backends import (
+from lmlog.processing.backends import (
     FileBackend,
     StreamBackend,
     AsyncFileBackend,

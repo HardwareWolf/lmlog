@@ -1,5 +1,5 @@
 """
-High-performance serialization using modern Python 3.11+ libraries.
+High-performance serialization.
 """
 
 import orjson

@@ -10,21 +10,21 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union, TextIO, List, Protocol, runtime_checkable
 from contextlib import contextmanager, asynccontextmanager
 
-from .pools import get_event_pool, get_string_pool, ObjectPool
-from .sampling import (
+from ..processing.pools import get_event_pool, get_string_pool, ObjectPool
+from ..intelligence.sampling import (
     Sampler,
     LogLevel,
     create_smart_sampler,
 )
-from .async_processing import AsyncEventQueue, CircuitBreaker
-from .otel_integration import (
+from ..processing.async_processing import AsyncEventQueue, CircuitBreaker
+from ..integrations.otel import (
     extract_trace_context,
     get_correlation_context,
     get_metric_generator,
     get_resource_detector,
 )
 from .serializers import MsgSpecEncoder, FastJSONEncoder
-from .backends import FileBackend, StreamBackend
+from ..processing.backends import FileBackend, StreamBackend
 
 
 @runtime_checkable

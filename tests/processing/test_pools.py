@@ -2,7 +2,7 @@
 Tests for object pooling functionality.
 """
 
-from lmlog.pools import ObjectPool, EventPool, StringPool, BufferPool
+from lmlog.processing.pools import ObjectPool, EventPool, StringPool, BufferPool
 
 
 class TestObjectPool:
@@ -181,7 +181,11 @@ class TestGlobalPools:
 
     def test_global_pools_exist(self):
         """Test that global pools are accessible."""
-        from lmlog.pools import get_event_pool, get_string_pool, get_buffer_pool
+        from lmlog.processing.pools import (
+            get_event_pool,
+            get_string_pool,
+            get_buffer_pool,
+        )
 
         event_pool = get_event_pool()
         string_pool = get_string_pool()
@@ -193,7 +197,11 @@ class TestGlobalPools:
 
     def test_global_pools_singleton(self):
         """Test that global pools are singletons."""
-        from lmlog.pools import get_event_pool, get_string_pool, get_buffer_pool
+        from lmlog.processing.pools import (
+            get_event_pool,
+            get_string_pool,
+            get_buffer_pool,
+        )
 
         assert get_event_pool() is get_event_pool()
         assert get_string_pool() is get_string_pool()

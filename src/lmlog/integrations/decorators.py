@@ -1,13 +1,14 @@
 import time
 import functools
 import asyncio
-from typing import Callable, Dict, Any
+from typing import Callable, Dict, Any, TYPE_CHECKING
 
-from .logger import LLMLogger
+if TYPE_CHECKING:
+    from ..core.base_logger import LLMLogger
 
 
 def capture_errors(
-    logger: LLMLogger,
+    logger: "LLMLogger",
     event_type: str = "exception",
     include_args: bool = False,
     include_traceback: bool = True,
@@ -16,7 +17,7 @@ def capture_errors(
     Decorator to automatically log exceptions.
 
     Args:
-        logger: LLMLogger instance
+        logger: "LLMLogger" instance
         event_type: Event type to log
         include_args: Whether to include function arguments in context
         include_traceback: Whether to include stack trace
@@ -79,12 +80,14 @@ def capture_errors(
     return decorator
 
 
-def log_performance(logger: LLMLogger, threshold_ms: int = 1000, log_all: bool = False):
+def log_performance(
+    logger: "LLMLogger", threshold_ms: int = 1000, log_all: bool = False
+):
     """
     Decorator to log performance issues.
 
     Args:
-        logger: LLMLogger instance
+        logger: "LLMLogger" instance
         threshold_ms: Log if execution takes longer than this
         log_all: Log all executions, not just slow ones
     """
@@ -169,7 +172,7 @@ def log_performance(logger: LLMLogger, threshold_ms: int = 1000, log_all: bool =
 
 
 def log_calls(
-    logger: LLMLogger,
+    logger: "LLMLogger",
     log_entry: bool = True,
     log_exit: bool = True,
     include_args: bool = False,
@@ -179,7 +182,7 @@ def log_calls(
     Decorator to log function entry and exit.
 
     Args:
-        logger: LLMLogger instance
+        logger: "LLMLogger" instance
         log_entry: Log when function is called
         log_exit: Log when function returns
         include_args: Include function arguments (be careful with sensitive data)

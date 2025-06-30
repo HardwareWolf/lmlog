@@ -1,5 +1,5 @@
 """
-High-performance logging backends with modern Python 3.11+ features.
+High-performance logging backends.
 """
 
 import asyncio
@@ -10,7 +10,7 @@ from typing import Any, Dict, Union, TextIO, Protocol
 from threading import Lock
 from collections.abc import Callable
 
-from .serializers import FastJSONEncoder, MsgSpecEncoder
+from ..core.serializers import FastJSONEncoder, MsgSpecEncoder
 
 
 class LogBackend(Protocol):

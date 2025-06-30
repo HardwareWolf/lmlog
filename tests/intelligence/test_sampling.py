@@ -4,7 +4,7 @@ Tests for sampling functionality.
 
 import time
 
-from lmlog.sampling import (
+from lmlog.intelligence.sampling import (
     LogLevel,
     SamplingDecision,
     AlwaysSampler,

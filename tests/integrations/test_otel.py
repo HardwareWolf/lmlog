@@ -5,7 +5,7 @@ Tests for OpenTelemetry integration.
 import pytest
 from unittest.mock import Mock, patch
 
-from lmlog.otel_integration import (
+from lmlog.integrations.otel import (
     TraceContextExtractor,
     CorrelationContext,
     MetricGenerator,
@@ -27,7 +27,7 @@ class TestTraceContextExtractor:
 
     def test_without_otel(self):
         """Test behavior without OpenTelemetry."""
-        with patch("lmlog.otel_integration.OTEL_AVAILABLE", False):
+        with patch("lmlog.integrations.otel.OTEL_AVAILABLE", False):
             extractor = TraceContextExtractor()
             assert not extractor.is_available()
 
@@ -35,9 +35,9 @@ class TestTraceContextExtractor:
             assert context == {}
 
     @pytest.mark.skipif(not OTEL_INSTALLED, reason="OpenTelemetry not installed")
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
-    @patch("opentelemetry.trace")
-    @patch("opentelemetry.baggage")
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
+    @patch("lmlog.integrations.otel.trace")
+    @patch("lmlog.integrations.otel.baggage")
     def test_with_otel_no_span(self, mock_baggage, mock_trace):
         """Test with OpenTelemetry but no active span."""
         mock_trace.get_tracer.return_value = Mock()
@@ -49,11 +49,10 @@ class TestTraceContextExtractor:
 
         assert context == {}
 
-    @pytest.mark.xfail(reason="OpenTelemetry mocking complex")
     @pytest.mark.skipif(not OTEL_INSTALLED, reason="OpenTelemetry not installed")
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
-    @patch("opentelemetry.trace")
-    @patch("opentelemetry.baggage")
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
+    @patch("lmlog.integrations.otel.trace")
+    @patch("lmlog.integrations.otel.baggage")
     def test_with_active_span(self, mock_baggage, mock_trace):
         """Test with active span."""
         mock_span_context = Mock()
@@ -79,27 +78,27 @@ class TestTraceContextExtractor:
         assert "span_id" in context
         assert context["baggage"] == {"key": "value"}
 
-    @pytest.mark.xfail(reason="OpenTelemetry mocking complex")
     @pytest.mark.skipif(not OTEL_INSTALLED, reason="OpenTelemetry not installed")
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
-    @patch("opentelemetry.trace")
-    def test_start_span(self, mock_trace):
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
+    def test_start_span(self):
         """Test span creation."""
         mock_tracer = Mock()
         mock_span = Mock()
-        mock_tracer.start_as_current_span.return_value.__enter__ = Mock(
-            return_value=mock_span
-        )
-        mock_tracer.start_as_current_span.return_value.__exit__ = Mock(
-            return_value=None
-        )
 
-        mock_trace.get_tracer.return_value = mock_tracer
+        # Create a proper context manager mock
+        context_manager = Mock()
+        context_manager.__enter__ = Mock(return_value=mock_span)
+        context_manager.__exit__ = Mock(return_value=None)
+        mock_tracer.start_as_current_span.return_value = context_manager
 
         extractor = TraceContextExtractor()
+        extractor._tracer = mock_tracer
 
         with extractor.start_span("test_span", test_attr="value") as span:
             assert span == mock_span
+
+        # Verify that set_attributes was called
+        mock_span.set_attributes.assert_called_once_with({"test_attr": "value"})
 
 
 class TestCorrelationContext:
@@ -157,17 +156,17 @@ class TestMetricGenerator:
 
     def test_without_otel(self):
         """Test behavior without OpenTelemetry."""
-        with patch("lmlog.otel_integration.OTEL_AVAILABLE", False):
+        with patch("lmlog.integrations.otel.OTEL_AVAILABLE", False):
             generator = MetricGenerator()
 
             generator.increment_counter("test_counter")
             generator.record_histogram("test_histogram", 1.0)
             generator.generate_from_event({"event_type": "test"})
 
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
     def test_with_otel_no_metrics(self):
         """Test with OpenTelemetry but no metrics module."""
-        with patch("lmlog.otel_integration.MetricGenerator.__init__") as mock_init:
+        with patch("lmlog.integrations.otel.MetricGenerator.__init__") as mock_init:
             mock_init.return_value = None
 
             generator = MetricGenerator.__new__(MetricGenerator)
@@ -180,14 +179,14 @@ class TestMetricGenerator:
             generator.record_histogram("test_histogram", 1.0)
             generator.generate_from_event({"event_type": "test"})
 
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
     def test_counter_creation(self):
         """Test counter creation and use."""
         mock_meter = Mock()
         mock_counter = Mock()
         mock_meter.create_counter.return_value = mock_counter
 
-        with patch("lmlog.otel_integration.MetricGenerator.__init__") as mock_init:
+        with patch("lmlog.integrations.otel.MetricGenerator.__init__") as mock_init:
             mock_init.return_value = None
 
             generator = MetricGenerator.__new__(MetricGenerator)
@@ -201,7 +200,7 @@ class TestMetricGenerator:
             mock_meter.create_counter.assert_called_once()
             mock_counter.add.assert_called_once_with(5, {"attr": "value"})
 
-    @patch("lmlog.otel_integration.OTEL_AVAILABLE", True)
+    @patch("lmlog.integrations.otel.OTEL_AVAILABLE", True)
     def test_event_metrics_generation(self):
         """Test event metrics generation."""
         mock_meter = Mock()
@@ -210,7 +209,7 @@ class TestMetricGenerator:
         mock_meter.create_counter.return_value = mock_counter
         mock_meter.create_histogram.return_value = mock_histogram
 
-        with patch("lmlog.otel_integration.MetricGenerator.__init__") as mock_init:
+        with patch("lmlog.integrations.otel.MetricGenerator.__init__") as mock_init:
             mock_init.return_value = None
 
             generator = MetricGenerator.__new__(MetricGenerator)

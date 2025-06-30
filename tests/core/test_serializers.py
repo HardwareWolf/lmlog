@@ -5,7 +5,7 @@ Tests for the serializers module.
 import json
 from datetime import datetime
 
-from lmlog.serializers import (
+from lmlog.core.serializers import (
     FastJSONEncoder,
     MsgSpecEncoder,
     EventSerializer,
@@ -243,3 +243,23 @@ class TestDefaultSerializer:
         """Test serializing numbers."""
         result = default_serializer(42)
         assert result == "42"
+
+
+class TestLLMLoggerEncoders:
+    """Test encoder selection in LLMLogger."""
+
+    def test_json_encoder_selection(self):
+        """Test FastJSONEncoder selection."""
+        from io import StringIO
+        from lmlog import LLMLogger
+        from lmlog.core.serializers import FastJSONEncoder
+        
+        output = StringIO()
+        logger = LLMLogger(
+            output=output,
+            encoder="json",  # Select FastJSONEncoder
+            async_processing=False,
+        )
+
+        # Verify encoder type
+        assert isinstance(logger._encoder, FastJSONEncoder)
