@@ -432,9 +432,10 @@ class IntelligentEventClassifier:
         "_pattern_cache",
         "_event_frequencies",
         "_cache_ttl",
+        "_cache_size",
     )
 
-    def __init__(self, cache_size: int = 10000, cache_ttl: float = 3600):
+    def __init__(self, cache_size: int = 10000, cache_ttl: float = 3600, max_frequency_count: int = 10000):
         """
         Initialize intelligent event classifier.
 
@@ -448,6 +449,7 @@ class IntelligentEventClassifier:
         self._pattern_cache: Dict[str, Tuple[EventClassification, float]] = {}
         self._event_frequencies: Counter = Counter()
         self._cache_ttl = cache_ttl
+        self._cache_size = cache_size
 
     def classify_event(self, event: Dict[str, Any]) -> EventClassification:
         """
@@ -495,7 +497,7 @@ class IntelligentEventClassifier:
 
         self._pattern_cache[event_hash] = (classification, time.time())
 
-        if len(self._pattern_cache) > 10000:
+        if len(self._pattern_cache) > self._cache_size:
             self._cleanup_cache()
 
         return classification
@@ -522,8 +524,8 @@ class IntelligentEventClassifier:
 
         total = sum(self._event_frequencies.values())
         if total > 10000:
-            for event_type in self._event_frequencies:
-                self._event_frequencies[event_type] //= 2
+            for et in self._event_frequencies:
+                self._event_frequencies[et] //= 2
 
     def _get_frequency(self, event_type: EventType) -> float:
         """Get event frequency (events per second estimate)."""

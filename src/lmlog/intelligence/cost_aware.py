@@ -700,8 +700,10 @@ class CostAwareLogger:
             for callback in self._callbacks:
                 try:
                     callback(self._metrics)
-                except Exception:
-                    pass
+                except Exception as e:
+                    import logging
+
+                    logging.exception(f"Error in cost callback: {e}")
 
             if self._budget.enable_auto_scaling:
                 self._metrics.sampling_adjustments += 1
