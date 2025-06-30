@@ -433,6 +433,7 @@ class IntelligentEventClassifier:
         "_event_frequencies",
         "_cache_ttl",
         "_cache_size",
+        "_max_frequency_count",
     )
 
     def __init__(
@@ -447,6 +448,7 @@ class IntelligentEventClassifier:
         Args:
             cache_size: Maximum cache size
             cache_ttl: Cache TTL in seconds
+            max_frequency_count: Maximum frequency count before decay
         """
         self._feature_extractor = FeatureExtractor()
         self._rule_classifier = RuleBasedClassifier()
@@ -455,6 +457,7 @@ class IntelligentEventClassifier:
         self._event_frequencies: Counter = Counter()
         self._cache_ttl = cache_ttl
         self._cache_size = cache_size
+        self._max_frequency_count = max_frequency_count
 
     def classify_event(self, event: Dict[str, Any]) -> EventClassification:
         """
@@ -528,7 +531,7 @@ class IntelligentEventClassifier:
         self._event_frequencies[event_type] += 1
 
         total = sum(self._event_frequencies.values())
-        if total > 10000:
+        if total > self._max_frequency_count:
             for et in self._event_frequencies:
                 self._event_frequencies[et] //= 2
 

@@ -5,6 +5,7 @@ Cost-aware logging system with intelligent optimization and budgeting.
 import gzip
 import io
 import json
+import logging
 import time
 import secrets
 import zlib
@@ -701,8 +702,6 @@ class CostAwareLogger:
                 try:
                     callback(self._metrics)
                 except Exception as e:
-                    import logging
-
                     logging.exception(f"Error in cost callback: {e}")
 
             if self._budget.enable_auto_scaling:
