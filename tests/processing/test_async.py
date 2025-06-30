@@ -340,7 +340,7 @@ class TestEventProcessor:
         """Test EventProcessor initialization."""
         from unittest.mock import Mock
         from lmlog.core.base_logger import EventProcessor
-        
+
         backend = Mock()
         encoder = Mock()
 
@@ -356,7 +356,7 @@ class TestEventProcessor:
         from unittest.mock import Mock
         from lmlog.core.base_logger import EventProcessor
         import asyncio
-        
+
         backend = Mock()
         backend.awrite = Mock(return_value=asyncio.Future())
         backend.awrite.return_value.set_result(None)
@@ -372,7 +372,7 @@ class TestEventProcessor:
         from unittest.mock import Mock
         from lmlog.core.base_logger import EventProcessor
         import asyncio
-        
+
         backend = Mock()
         backend.awrite = Mock(return_value=asyncio.Future())
         backend.awrite.return_value.set_result(None)
@@ -388,7 +388,7 @@ class TestEventProcessor:
         """Test EventProcessor._write_batch with errors."""
         from unittest.mock import Mock, patch
         from lmlog.core.base_logger import EventProcessor
-        
+
         backend = Mock()
         backend.awrite = Mock(side_effect=Exception("Test error"))
 
@@ -411,7 +411,7 @@ class TestLLMLoggerAsyncQueue:
         """Test async queue creation with async_processing=True."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=True)
 
@@ -429,7 +429,7 @@ class TestLLMLoggerAsyncOperations:
         from unittest.mock import Mock
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=True, sampler=AlwaysSampler()
@@ -451,7 +451,7 @@ class TestLLMLoggerAsyncOperations:
         from unittest.mock import Mock
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=True, sampler=AlwaysSampler()
@@ -477,7 +477,7 @@ class TestLLMLoggerAsyncOperations:
         from io import StringIO
         from unittest.mock import Mock, patch
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=True)
 
@@ -495,7 +495,7 @@ class TestLLMLoggerAsyncOperations:
         """Test async logging when disabled."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, enabled=False, async_processing=False)
 
@@ -510,7 +510,7 @@ class TestLLMLoggerAsyncOperations:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import NeverSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=NeverSampler()
@@ -528,7 +528,7 @@ class TestLLMLoggerAsyncOperations:
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
         import json
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -557,7 +557,7 @@ class TestLLMLoggerAsyncOperations:
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
         import asyncio
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=True, sampler=AlwaysSampler()
@@ -585,7 +585,7 @@ class TestLLMLoggerAsyncOperations:
         from lmlog.intelligence.sampling import AlwaysSampler
         import asyncio
         import json
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -612,7 +612,7 @@ class TestLLMLoggerAsyncOperations:
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
         import json
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()

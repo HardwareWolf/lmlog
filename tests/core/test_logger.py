@@ -3,6 +3,7 @@ Tests for LMLogger with Phase 2 features.
 """
 
 import json
+import pytest
 from lmlog import LMLogger
 from lmlog.intelligence.classification import EventType, EventPriority
 from lmlog.intelligence.aggregation import AggregatedEvent
@@ -416,7 +417,7 @@ class TestBaseLoggerProtocols:
     def test_log_backend_protocol(self):
         """Test LogBackend protocol methods."""
         from lmlog.core.base_logger import LogBackend
-        
+
         class TestBackend:
             def write(self, event):
                 pass
@@ -438,12 +439,13 @@ class TestBaseLoggerProtocols:
         backend.flush()
         backend.close()
         import asyncio
+
         asyncio.run(backend.awrite({"test": "event"}))
 
     def test_log_encoder_protocol(self):
         """Test LogEncoder protocol methods."""
         from lmlog.core.base_logger import LogEncoder
-        
+
         class TestEncoder:
             def encode(self, event):
                 return json.dumps(event).encode()
@@ -459,7 +461,7 @@ class TestBaseLoggerProtocols:
         """Test LogEventContext methods."""
         from lmlog.core.base_logger import LogEventContext
         from lmlog.intelligence.sampling import LogLevel
-        
+
         context = LogEventContext(
             level=LogLevel.ERROR, event_type="test_event", context={"key": "value"}
         )
@@ -475,7 +477,7 @@ class TestLLMLoggerSampling:
         """Test global context inclusion."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -496,7 +498,7 @@ class TestLLMLoggerSampling:
         """Test logging when disabled."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, enabled=False, async_processing=False)
 
@@ -511,7 +513,7 @@ class TestLLMLoggerSampling:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import NeverSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -536,7 +538,7 @@ class TestLLMLoggerEntityFields:
         """Test entity_type and entity_id handling."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -558,7 +560,7 @@ class TestLLMLoggerBuffering:
         """Test buffering without auto-flush."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -593,7 +595,7 @@ class TestLLMLoggerSpecialMethods:
         """Test log_state_change with trigger."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -623,7 +625,7 @@ class TestLLMLoggerContextManagers:
         from io import StringIO
         from lmlog import LLMLogger
         import time
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -652,7 +654,7 @@ class TestLLMLoggerContextManagers:
         from io import StringIO
         from lmlog import LLMLogger
         import pytest
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -681,7 +683,7 @@ class TestLLMLoggerCacheAndSettings:
         """Test set_sampler method."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=False)
 
@@ -694,7 +696,7 @@ class TestLLMLoggerCacheAndSettings:
         """Test global context manipulation."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         logger = LLMLogger(output=StringIO())
 
         # Test add_global_context
@@ -721,7 +723,7 @@ class TestLMLoggerCoverage:
     def test_log_event_disabled(self, tmp_path):
         """Test log_event when disabled."""
         from io import StringIO
-        
+
         logger = LMLogger(output=StringIO(), enabled=False, async_processing=False)
 
         logger.log_event("test_event")
@@ -733,7 +735,7 @@ class TestLMLoggerCoverage:
     def test_cost_aware_sampling(self, tmp_path):
         """Test cost-aware sampling."""
         from io import StringIO
-        
+
         output = StringIO()
         logger = LMLogger(
             output=output,
@@ -758,7 +760,7 @@ class TestLMLoggerCoverage:
     def test_get_methods_without_features(self, tmp_path):
         """Test get methods when features are disabled."""
         from io import StringIO
-        
+
         logger = LMLogger(
             output=StringIO(),
             enable_classification=False,
@@ -776,7 +778,7 @@ class TestLMLoggerCoverage:
     def test_enable_feature_aggregation(self, tmp_path):
         """Test enabling aggregation feature."""
         from io import StringIO
-        
+
         logger = LMLogger(
             output=StringIO(), enable_aggregation=False, async_processing=False
         )
@@ -791,7 +793,7 @@ class TestLMLoggerCoverage:
     def test_enable_feature_cost_awareness(self, tmp_path):
         """Test enabling cost_awareness feature."""
         from io import StringIO
-        
+
         logger = LMLogger(
             output=StringIO(), enable_cost_awareness=False, async_processing=False
         )
@@ -806,7 +808,7 @@ class TestLMLoggerCoverage:
     def test_disable_features(self, tmp_path):
         """Test disabling features."""
         from io import StringIO
-        
+
         logger = LMLogger(
             output=StringIO(),
             enable_classification=True,
@@ -839,7 +841,7 @@ class TestLLMLoggerStats:
         from io import StringIO
         from unittest.mock import Mock
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=True)
 
@@ -862,7 +864,7 @@ class TestLLMLoggerBufferOperations:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -889,7 +891,7 @@ class TestLLMLoggerBufferOperations:
         from unittest.mock import Mock
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -918,7 +920,7 @@ class TestLLMLoggerBufferOperations:
         """Test clear_caches method."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=False)
 
@@ -939,7 +941,7 @@ class TestLLMLoggerBufferOperations:
         from unittest.mock import Mock
         from lmlog import LLMLogger
         import asyncio
-        
+
         output = StringIO()
         logger = LLMLogger(output=output, async_processing=True)
 
@@ -956,7 +958,7 @@ class TestLLMLoggerBufferOperations:
         """Test enabled property."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         logger = LLMLogger(output=StringIO(), enabled=True)
         assert logger.enabled is True
 
@@ -967,7 +969,7 @@ class TestLLMLoggerBufferOperations:
         """Test global_context property."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         logger = LLMLogger(output=StringIO(), global_context={"app": "test"})
 
         context = logger.global_context
@@ -981,7 +983,7 @@ class TestLLMLoggerBufferOperations:
         """Test buffer-related properties."""
         from io import StringIO
         from lmlog import LLMLogger
-        
+
         logger = LLMLogger(output=StringIO(), buffer_size=100, auto_flush=True)
 
         assert logger.buffer_size == 100
@@ -999,7 +1001,7 @@ class TestLLMLoggerBufferOperations:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -1038,7 +1040,7 @@ class TestLLMLoggerBufferOperations:
         from lmlog import LLMLogger
         from lmlog.processing.backends import FileBackend, StreamBackend
         import tempfile
-        
+
         # Test with file path
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             logger = LLMLogger(output=StringIO())
@@ -1056,7 +1058,7 @@ class TestLLMLoggerBufferOperations:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,
@@ -1080,10 +1082,9 @@ class TestEdgeCasesAndIntegration:
 
     def test_logger_with_path_object(self, tmp_path):
         """Test logger with Path object."""
-        from pathlib import Path
         from lmlog import LLMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
-        
+
         log_path = tmp_path / "test.jsonl"
         logger = LLMLogger(
             output=log_path, async_processing=False, sampler=AlwaysSampler()
@@ -1100,7 +1101,7 @@ class TestEdgeCasesAndIntegration:
         from lmlog import LMLogger
         from lmlog.intelligence.sampling import AlwaysSampler
         import json
-        
+
         output = StringIO()
         logger = LMLogger(
             output=output,
@@ -1133,7 +1134,7 @@ class TestEdgeCasesAndIntegration:
         from lmlog.intelligence.sampling import AlwaysSampler
         import asyncio
         import json
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()

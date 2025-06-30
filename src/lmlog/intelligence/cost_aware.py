@@ -436,7 +436,6 @@ class AdaptiveSamplingController:
 
         self._current_sampling = new_sampling
 
-        # Apply priority-based adjustment separately
         priority_adjusted = new_sampling * (0.5 + event_priority)
 
         self._last_adjustment = time.time()

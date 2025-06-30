@@ -253,7 +253,7 @@ class TestLLMLoggerEncoders:
         from io import StringIO
         from lmlog import LLMLogger
         from lmlog.core.serializers import FastJSONEncoder
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output,

@@ -197,7 +197,7 @@ class TestAsyncDecorators:
         """Test async capture_errors decorator."""
         import asyncio
         from io import StringIO
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -225,7 +225,7 @@ class TestAsyncDecorators:
         """Test async log_performance decorator."""
         import asyncio
         from io import StringIO
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -264,7 +264,7 @@ class TestAsyncDecorators:
         """Test async log_calls decorator."""
         import asyncio
         from io import StringIO
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()
@@ -300,7 +300,7 @@ class TestAsyncDecorators:
         """Test async log_calls with exception."""
         import asyncio
         from io import StringIO
-        
+
         output = StringIO()
         logger = LLMLogger(
             output=output, async_processing=False, sampler=AlwaysSampler()

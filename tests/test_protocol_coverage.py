@@ -160,7 +160,6 @@ class TestProtocolComplianceExecution:
     def test_runtime_checkable_protocols(self):
         """Test runtime checkable protocol behavior."""
 
-
         # Verify LogBackend is runtime checkable
         assert hasattr(LogBackend, "__subclasshook__")
 
@@ -250,13 +249,7 @@ class TestDirectMethodCalls:
 
         asyncio.run(test_async_method())
 
-        # Verify all methods were called
-        expected_calls = [
-            ("write", {"test": 1}),
-            ("flush",),
-            ("close",),
-            ("awrite", {"async_test": 1}),
-        ]
+        # All protocol methods have been tested
 
         assert len(backend.calls) == 4
         assert ("write", {"test": 1}) in backend.calls
