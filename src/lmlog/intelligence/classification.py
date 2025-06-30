@@ -435,7 +435,12 @@ class IntelligentEventClassifier:
         "_cache_size",
     )
 
-    def __init__(self, cache_size: int = 10000, cache_ttl: float = 3600, max_frequency_count: int = 10000):
+    def __init__(
+        self,
+        cache_size: int = 10000,
+        cache_ttl: float = 3600,
+        max_frequency_count: int = 10000,
+    ):
         """
         Initialize intelligent event classifier.
 

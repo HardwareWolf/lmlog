@@ -135,9 +135,9 @@ class PatternDetector:
                 var_name = f"{placeholder}_{i}"
                 variables[var_name] = match.group()
                 normalized = (
-                    normalized[:match.start()]
+                    normalized[: match.start()]
                     + placeholder
-                    + normalized[match.end():]
+                    + normalized[match.end() :]
                 )
 
         return normalized, variables
