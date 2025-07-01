@@ -8,7 +8,7 @@
 
 > Intelligent structured logging for Python applications, optimized for LLM analysis
 
-LMLog provides high-performance structured logging with built-in intelligence features including ML-based event classification, pattern detection, cost-aware sampling, and async processing. Designed specifically for LLM consumption to enable superior debugging assistance.
+LMLog provides high-performance structured logging with built-in intelligence features including rule-based event classification, pattern detection, cost-aware sampling, and async processing. Designed specifically for LLM consumption to enable superior debugging assistance.
 
 ## Features
 
@@ -20,11 +20,11 @@ LMLog provides high-performance structured logging with built-in intelligence fe
 - **Zero Allocation** - Preallocated buffers in hot paths
 
 ### Intelligence Layer
-- **ML Event Classification** - 9 event types with confidence scoring
-- **Smart Aggregation** - Pattern detection and variable extraction
-- **Cost-Aware Logging** - Budget management with dynamic sampling
+- **Rule-Based Classification** - 12 event types with sub-millisecond performance
+- **Pattern-Based Aggregation** - Deterministic pattern detection and variable extraction  
+- **Cost-Aware Logging** - Budget management with token bucket throttling
 - **Adaptive Sampling** - 8 sampling strategies with auto-selection
-- **Anomaly Detection** - Statistical analysis for unusual patterns
+- **Predictable Performance** - No ML dependencies, consistent behavior
 
 ### Processing Engine
 - **Async Processing** - Non-blocking event queues with circuit breakers
@@ -84,18 +84,19 @@ logger.log_performance_issue(
 from lmlog import LMLogger
 from lmlog.intelligence.cost_aware import CostBudget
 
-# Enhanced logger with ML classification and cost awareness
+# Enhanced logger with rule-based classification and cost awareness
 logger = LMLogger(
     output="smart.jsonl",
     enable_classification=True,
     enable_aggregation=True,
     enable_cost_awareness=True,
     cost_budget=CostBudget(
-        max_daily_bytes=1024 * 1024 * 1024,  # 1GB
-        max_events_per_second=1000
+        max_events_per_second=1000,
+        max_daily_events=100000,
+        alert_threshold=0.8
     ),
-    aggregation_window=60,
-    aggregation_threshold=0.8
+    aggregation_threshold=5,
+    max_patterns=1000
 )
 
 # Events are automatically classified and aggregated
