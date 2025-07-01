@@ -1,21 +1,44 @@
-"""Intelligence and ML functionality."""
+"""Intelligence functionality for fast, predictable log processing."""
 
-from .classification import IntelligentEventClassifier, EventType, EventPriority
-from .aggregation import SmartAggregator, AggregatedEvent, PatternDetector
-from .cost_aware import CostAwareLogger, CostBudget, CostMetrics, StorageTier
+# Rule-based classification (replaces ML-based classification)
+from .rules import RuleBasedClassifier, EventType, EventPriority, EventClassification
+
+# Pattern-based aggregation
+from .aggregation import PatternBasedAggregator, AggregatedEvent
+
+# Cost-aware controls
+from .cost_aware import (
+    CostController,
+    CostBudget,
+    CostMetrics,
+    CostTier,
+    Throttler,
+    CostSampler,
+)
+
+# Keep sampling for backward compatibility
 from .sampling import Sampler, ProbabilisticSampler, AlwaysSampler, NeverSampler
 
 __all__ = [
-    "IntelligentEventClassifier",
+    # Rule-based classification
+    "RuleBasedClassifier",
     "EventType",
-    "EventPriority",
-    "SmartAggregator",
+    "EventPriority", 
+    "EventClassification",
+    
+    # Pattern-based aggregation
+    "PatternBasedAggregator",
     "AggregatedEvent",
-    "PatternDetector",
-    "CostAwareLogger",
+    
+    # Cost controls
+    "CostController",
     "CostBudget",
     "CostMetrics",
-    "StorageTier",
+    "CostTier",
+    "Throttler",
+    "CostSampler",
+    
+    # Sampling (backward compatibility)
     "Sampler",
     "ProbabilisticSampler",
     "AlwaysSampler",

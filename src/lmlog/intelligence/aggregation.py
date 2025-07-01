@@ -1,596 +1,387 @@
 """
-Pattern detection and intelligent log aggregation system.
+Pattern-based log aggregation for noise reduction.
 """
 
-import hashlib
 import re
 import time
-from collections import Counter, defaultdict
+from typing import Dict, Any, Optional, List, Set, Pattern
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from collections import Counter
 
 
-@dataclass
-class LogPattern:
-    """Represents a detected log pattern."""
+@dataclass(frozen=True)
+class AggregationPattern:
+    """Defines how similar events should be aggregated."""
 
-    pattern_id: str
-    pattern_template: str
-    variable_positions: List[Tuple[int, int]]
-    event_count: int = 0
-    first_seen: float = field(default_factory=time.time)
-    last_seen: float = field(default_factory=time.time)
-    sample_events: List[Dict[str, Any]] = field(default_factory=list)
-    variable_values: Dict[str, Set[str]] = field(
-        default_factory=lambda: defaultdict(set)
-    )
+    name: str
+    normalizer: Pattern[str]
+    placeholder: str
+    min_occurrences: int
+    time_window_seconds: int
 
 
 @dataclass
 class AggregatedEvent:
-    """Represents an aggregated log event."""
+    """Represents a group of similar events that have been aggregated."""
 
-    pattern_id: str
-    event_type: str
     pattern: str
+    normalized_message: str
     count: int
-    time_window: Dict[str, float]
+    first_seen: float
+    last_seen: float
     sample_events: List[Dict[str, Any]]
-    statistics: Dict[str, Any]
-    variables: Dict[str, List[str]]
+    variables_seen: Set[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert aggregated event to dictionary for logging."""
+        return {
+            "event_type": "aggregated_event",
+            "pattern": self.pattern,
+            "normalized_message": self.normalized_message,
+            "count": self.count,
+            "duration_seconds": self.last_seen - self.first_seen,
+            "first_seen": self.first_seen,
+            "last_seen": self.last_seen,
+            "sample_events": self.sample_events[:3],  # Keep only first 3 samples
+            "unique_variables": len(self.variables_seen),
+        }
 
 
-class PatternDetector:
-    """Detect patterns in log messages using various techniques."""
+class PatternBasedAggregator:
+    """
+    Fast pattern-based log aggregation using pre-compiled regex patterns.
+    
+    Groups similar log messages by normalizing variable parts and counting
+    occurrences within time windows.
+    """
 
     __slots__ = (
         "_patterns",
-        "_pattern_index",
-        "_similarity_threshold",
-        "_min_pattern_length",
-        "_variable_patterns",
+        "_active_aggregations",
+        "_aggregation_threshold",
         "_max_patterns",
-    )
-
-    def __init__(
-        self,
-        similarity_threshold: float = 0.8,
-        min_pattern_length: int = 10,
-        max_patterns: int = 1000,
-    ):
-        """
-        Initialize pattern detector.
-
-        Args:
-            similarity_threshold: Minimum similarity for pattern matching
-            min_pattern_length: Minimum length for pattern consideration
-            max_patterns: Maximum number of patterns to track
-        """
-        self._patterns: Dict[str, LogPattern] = {}
-        self._pattern_index: Dict[str, List[str]] = defaultdict(list)
-        self._similarity_threshold = similarity_threshold
-        self._min_pattern_length = min_pattern_length
-        self._max_patterns = max_patterns
-
-        self._variable_patterns = [
-            (re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), "<IP>"),
-            (re.compile(r"\d+"), "<NUMBER>"),
-            (re.compile(r"\b[0-9a-fA-F]{8,}\b"), "<HEX>"),
-            (
-                re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"),
-                "<EMAIL>",
-            ),
-            (
-                re.compile(
-                    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-                ),
-                "<UUID>",
-            ),
-            (re.compile(r"/[a-zA-Z0-9/_.-]+"), "<PATH>"),
-            (re.compile(r'"[^"]*"'), "<STRING>"),
-            (re.compile(r"'[^']*'"), "<STRING>"),
-        ]
-
-    def detect_pattern(self, message: str) -> Optional[str]:
-        """
-        Detect or match pattern for a log message.
-
-        Args:
-            message: Log message
-
-        Returns:
-            Pattern ID if found or created
-        """
-        if len(message) < self._min_pattern_length:
-            return None
-
-        normalized, variables = self._normalize_message(message)
-
-        pattern_id = self._find_similar_pattern(normalized)
-
-        if pattern_id:
-            self._update_pattern(pattern_id, message, variables)
-        else:
-            pattern_id = self._create_pattern(normalized, message, variables)
-
-        return pattern_id
-
-    def _normalize_message(self, message: str) -> Tuple[str, Dict[str, str]]:
-        """
-        Normalize message by replacing variables with placeholders.
-
-        Args:
-            message: Original message
-
-        Returns:
-            Tuple of (normalized message, variable mappings)
-        """
-        normalized = message
-        variables = {}
-
-        for pattern, placeholder in self._variable_patterns:
-            matches = list(pattern.finditer(normalized))
-            for i, match in enumerate(reversed(matches)):
-                var_name = f"{placeholder}_{i}"
-                variables[var_name] = match.group()
-                normalized = (
-                    normalized[: match.start()]
-                    + placeholder
-                    + normalized[match.end() :]
-                )
-
-        return normalized, variables
-
-    def _find_similar_pattern(self, normalized: str) -> Optional[str]:
-        """Find similar existing pattern."""
-        tokens = normalized.split()[:3]
-
-        if not tokens:
-            return None
-
-        key = " ".join(tokens)
-        candidates = self._pattern_index.get(key, [])
-
-        for pattern_id in candidates:
-            pattern = self._patterns.get(pattern_id)
-            if not pattern:
-                continue
-
-            similarity = SequenceMatcher(
-                None, pattern.pattern_template, normalized
-            ).ratio()
-
-            if similarity >= self._similarity_threshold:
-                return pattern_id
-
-        return None
-
-    def _create_pattern(
-        self, normalized: str, original: str, variables: Dict[str, str]
-    ) -> str:
-        """Create new pattern."""
-        if len(self._patterns) >= self._max_patterns:
-            self._cleanup_patterns()
-
-        pattern_id = hashlib.md5(
-            normalized.encode(), usedforsecurity=False
-        ).hexdigest()[:16]
-
-        variable_positions = []
-        for placeholder in [
-            "<NUMBER>",
-            "<HEX>",
-            "<IP>",
-            "<EMAIL>",
-            "<UUID>",
-            "<PATH>",
-            "<STRING>",
-        ]:
-            pos = 0
-            while True:
-                pos = normalized.find(placeholder, pos)
-                if pos == -1:
-                    break
-                variable_positions.append((pos, pos + len(placeholder)))
-                pos += len(placeholder)
-
-        pattern = LogPattern(
-            pattern_id=pattern_id,
-            pattern_template=normalized,
-            variable_positions=variable_positions,
-            event_count=1,
-            sample_events=[{"message": original}][:5],
-        )
-
-        for var_name, var_value in variables.items():
-            pattern.variable_values[var_name].add(var_value)
-
-        self._patterns[pattern_id] = pattern
-
-        tokens = normalized.split()[:3]
-        if tokens:
-            key = " ".join(tokens)
-            self._pattern_index[key].append(pattern_id)
-
-        return pattern_id
-
-    def _update_pattern(
-        self, pattern_id: str, message: str, variables: Dict[str, str]
-    ) -> None:
-        """Update existing pattern with new occurrence."""
-        pattern = self._patterns.get(pattern_id)
-        if not pattern:
-            return
-
-        pattern.event_count += 1
-        pattern.last_seen = time.time()
-
-        if len(pattern.sample_events) < 5:
-            pattern.sample_events.append({"message": message})
-
-        for var_name, var_value in variables.items():
-            if len(pattern.variable_values[var_name]) < 100:
-                pattern.variable_values[var_name].add(var_value)
-
-    def _cleanup_patterns(self) -> None:
-        """Remove least recently used patterns."""
-        sorted_patterns = sorted(self._patterns.items(), key=lambda x: x[1].last_seen)
-
-        to_remove = len(sorted_patterns) // 4
-
-        for pattern_id, _ in sorted_patterns[:to_remove]:
-            del self._patterns[pattern_id]
-
-            for patterns in self._pattern_index.values():
-                if pattern_id in patterns:
-                    patterns.remove(pattern_id)
-
-    def get_pattern(self, pattern_id: str) -> Optional[LogPattern]:
-        """Get pattern by ID."""
-        return self._patterns.get(pattern_id)
-
-    def get_patterns(self) -> List[LogPattern]:
-        """Get all patterns sorted by frequency."""
-        return sorted(
-            self._patterns.values(), key=lambda p: p.event_count, reverse=True
-        )
-
-
-class EventAggregator:
-    """Aggregate events based on patterns and time windows."""
-
-    __slots__ = (
-        "_window_seconds",
-        "_max_unique_patterns",
-        "_active_windows",
-        "_pattern_detector",
-        "_aggregation_stats",
-    )
-
-    def __init__(
-        self,
-        window_seconds: int = 60,
-        max_unique_patterns: int = 100,
-        similarity_threshold: float = 0.8,
-    ):
-        """
-        Initialize event aggregator.
-
-        Args:
-            window_seconds: Time window for aggregation
-            max_unique_patterns: Maximum unique patterns per window
-            similarity_threshold: Pattern similarity threshold
-        """
-        self._window_seconds = window_seconds
-        self._max_unique_patterns = max_unique_patterns
-        self._pattern_detector = PatternDetector(
-            similarity_threshold=similarity_threshold
-        )
-        self._active_windows: Dict[str, Dict[str, Any]] = {}
-        self._aggregation_stats = {
-            "total_events": 0,
-            "aggregated_events": 0,
-            "unique_patterns": 0,
-        }
-
-    def add_event(self, event: Dict[str, Any]) -> Optional[str]:
-        """
-        Add event for aggregation.
-
-        Args:
-            event: Event to aggregate
-
-        Returns:
-            Pattern ID if aggregated, None otherwise
-        """
-        self._aggregation_stats["total_events"] += 1
-
-        message = self._extract_message(event)
-        if not message:
-            return None
-
-        pattern_id = self._pattern_detector.detect_pattern(message)
-        if not pattern_id:
-            return None
-
-        window_key = self._get_window_key(event.get("timestamp", time.time()))
-
-        if window_key not in self._active_windows:
-            self._active_windows[window_key] = {}
-
-        window = self._active_windows[window_key]
-
-        if pattern_id not in window:
-            if len(window) >= self._max_unique_patterns:
-                return None
-
-            window[pattern_id] = {
-                "events": [],
-                "count": 0,
-                "first_timestamp": time.time(),
-                "last_timestamp": time.time(),
-                "event_type": event.get("event_type", "unknown"),
-            }
-
-        window_data = window[pattern_id]
-        window_data["count"] += 1
-        window_data["last_timestamp"] = time.time()
-
-        if len(window_data["events"]) < 5:
-            window_data["events"].append(event)
-
-        self._aggregation_stats["aggregated_events"] += 1
-
-        return pattern_id
-
-    def get_aggregated_events(
-        self, window_key: Optional[str] = None
-    ) -> List[AggregatedEvent]:
-        """
-        Get aggregated events for a window.
-
-        Args:
-            window_key: Window key (default: current window)
-
-        Returns:
-            List of aggregated events
-        """
-        if window_key is None:
-            window_key = self._get_window_key(time.time())
-
-        window = self._active_windows.get(window_key, {})
-        aggregated = []
-
-        for pattern_id, data in window.items():
-            pattern = self._pattern_detector.get_pattern(pattern_id)
-            if not pattern:
-                continue
-
-            statistics = self._calculate_statistics(data["events"])
-
-            variables = {}
-            for var_name, var_values in pattern.variable_values.items():
-                variables[var_name] = list(var_values)[:10]
-
-            aggregated.append(
-                AggregatedEvent(
-                    pattern_id=pattern_id,
-                    event_type=data["event_type"],
-                    pattern=pattern.pattern_template,
-                    count=data["count"],
-                    time_window={
-                        "start": data["first_timestamp"],
-                        "end": data["last_timestamp"],
-                    },
-                    sample_events=data["events"],
-                    statistics=statistics,
-                    variables=variables,
-                )
-            )
-
-        return sorted(aggregated, key=lambda x: x.count, reverse=True)
-
-    def cleanup_old_windows(self) -> None:
-        """Remove old aggregation windows."""
-        current_time = time.time()
-        cutoff_time = current_time - (self._window_seconds * 2)
-
-        to_remove = []
-        for window_key in self._active_windows:
-            window_time = float(window_key.split("_")[1])
-            if window_time < cutoff_time:
-                to_remove.append(window_key)
-
-        for window_key in to_remove:
-            del self._active_windows[window_key]
-
-    def _extract_message(self, event: Dict[str, Any]) -> Optional[str]:
-        """Extract message from event."""
-        for key in ["message", "msg", "text", "error", "description"]:
-            if key in event and isinstance(event[key], str):
-                return event[key]
-
-        if "event_type" in event and "context" in event:
-            parts = [str(event["event_type"])]
-            if isinstance(event["context"], dict):
-                parts.extend(f"{k}={v}" for k, v in event["context"].items())
-            return " ".join(parts)
-
-        return None
-
-    def _get_window_key(self, timestamp: Union[float, str]) -> str:
-        """Get window key for timestamp."""
-        if isinstance(timestamp, str):
-            import datetime
-
-            ts = datetime.datetime.fromisoformat(
-                timestamp.replace("Z", "+00:00")
-            ).timestamp()
-        else:
-            ts = timestamp
-        window_start = int(ts // self._window_seconds) * self._window_seconds
-        return f"window_{window_start}"
-
-    def _calculate_statistics(self, events: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate statistics for aggregated events."""
-        stats: Dict[str, Any] = {
-            "unique_users": len(
-                set(e.get("user_id") for e in events if e.get("user_id"))
-            ),
-            "unique_sessions": len(
-                set(e.get("session_id") for e in events if e.get("session_id"))
-            ),
-        }
-
-        durations = []
-        for e in events:
-            duration = e.get("duration_ms")
-            if duration is not None:
-                durations.append(float(duration))
-
-        if durations:
-            stats["avg_duration_ms"] = sum(durations) / len(durations)
-            stats["min_duration_ms"] = min(durations)
-            stats["max_duration_ms"] = max(durations)
-
-        error_codes = [
-            str(e.get("error_code")) for e in events if e.get("error_code") is not None
-        ]
-
-        if error_codes:
-            error_counts = Counter(error_codes)
-            stats["top_errors"] = error_counts.most_common(5)
-
-        return stats
-
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get aggregation statistics."""
-        stats = self._aggregation_stats.copy()
-        stats["active_windows"] = len(self._active_windows)
-        stats["total_patterns"] = sum(
-            len(window) for window in self._active_windows.values()
-        )
-        stats["unique_patterns"] = len(self._pattern_detector._patterns)
-        return stats
-
-
-class SmartAggregator:
-    """
-    High-level aggregator combining pattern detection and time-based aggregation.
-    """
-
-    __slots__ = (
-        "_aggregator",
-        "_enabled",
-        "_auto_aggregate_threshold",
+        "_stats",
+        "_cleanup_interval",
         "_last_cleanup",
     )
 
     def __init__(
         self,
-        window_seconds: int = 60,
-        similarity_threshold: float = 0.8,
-        max_unique_patterns: int = 100,
-        auto_aggregate_threshold: int = 10,
+        aggregation_threshold: int = 5,
+        max_patterns: int = 1000,
+        cleanup_interval: int = 300,
     ):
         """
-        Initialize smart aggregator.
+        Initialize pattern-based aggregator.
 
         Args:
-            window_seconds: Aggregation window size
-            similarity_threshold: Pattern similarity threshold
-            max_unique_patterns: Maximum patterns per window
-            auto_aggregate_threshold: Minimum events for auto-aggregation
+            aggregation_threshold: Minimum occurrences to trigger aggregation
+            max_patterns: Maximum number of patterns to track
+            cleanup_interval: How often to clean up expired patterns (seconds)
         """
-        self._aggregator = EventAggregator(
-            window_seconds=window_seconds,
-            max_unique_patterns=max_unique_patterns,
-            similarity_threshold=similarity_threshold,
-        )
-        self._enabled = True
-        self._auto_aggregate_threshold = auto_aggregate_threshold
+        self._patterns = self._build_aggregation_patterns()
+        self._active_aggregations: Dict[str, AggregatedEvent] = {}
+        self._aggregation_threshold = aggregation_threshold
+        self._max_patterns = max_patterns
+        self._cleanup_interval = cleanup_interval
         self._last_cleanup = time.time()
+        self._stats = {
+            "events_processed": 0,
+            "events_aggregated": 0,
+            "patterns_created": 0,
+            "patterns_expired": 0,
+        }
 
     def should_aggregate(self, event: Dict[str, Any]) -> bool:
         """
-        Determine if event should be aggregated.
+        Determine if an event should be aggregated.
 
         Args:
-            event: Event to check
+            event: Log event to check
 
         Returns:
-            True if event should be aggregated
+            True if event should be aggregated, False if it should be logged normally
         """
-        if not self._enabled:
+        self._stats["events_processed"] += 1
+
+        # Skip aggregation for high-priority events
+        if self._is_high_priority_event(event):
             return False
 
-        if event.get("level") in ["ERROR", "CRITICAL"]:
-            return False
-
-        if event.get("aggregate", True) is False:
-            return False
-
+        # Get message for pattern matching
         message = self._extract_message(event)
-        if not message or len(message) < 20:
+        if not message:
             return False
 
-        return True
+        # Find matching pattern and normalize
+        pattern_key, normalized_message, variables = self._find_and_normalize_pattern(message)
+        if not pattern_key:
+            return False
 
-    def process_event(self, event: Dict[str, Any]) -> Optional[AggregatedEvent]:
+        # Update or create aggregation
+        current_time = time.time()
+        
+        if pattern_key in self._active_aggregations:
+            # Update existing aggregation
+            aggregation = self._active_aggregations[pattern_key]
+            aggregation.count += 1
+            aggregation.last_seen = current_time
+            aggregation.variables_seen.update(variables)
+            
+            # Add sample event if we don't have many yet
+            if len(aggregation.sample_events) < 3:
+                aggregation.sample_events.append(self._sanitize_event_for_sample(event))
+                
+        else:
+            # Create new aggregation
+            self._active_aggregations[pattern_key] = AggregatedEvent(
+                pattern=pattern_key,
+                normalized_message=normalized_message,
+                count=1,
+                first_seen=current_time,
+                last_seen=current_time,
+                sample_events=[self._sanitize_event_for_sample(event)],
+                variables_seen=set(variables),
+            )
+            self._stats["patterns_created"] += 1
+
+        # Check if we should emit aggregated event
+        aggregation = self._active_aggregations[pattern_key]
+        if aggregation.count >= self._aggregation_threshold:
+            self._stats["events_aggregated"] += 1
+            return True
+
+        # Cleanup old patterns periodically
+        if current_time - self._last_cleanup > self._cleanup_interval:
+            self._cleanup_expired_patterns()
+
+        return False
+
+    def get_aggregated_event(self, event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Process event and return aggregated version if applicable.
+        Get the aggregated event data for a pattern.
 
         Args:
-            event: Event to process
+            event: Original event that triggered aggregation
 
         Returns:
-            Aggregated event if threshold met, None otherwise
+            Aggregated event data or None if not found
         """
-        if not self.should_aggregate(event):
+        message = self._extract_message(event)
+        if not message:
             return None
 
-        pattern_id = self._aggregator.add_event(event)
-        if not pattern_id:
+        pattern_key, _, _ = self._find_and_normalize_pattern(message)
+        if not pattern_key or pattern_key not in self._active_aggregations:
             return None
 
-        if time.time() - self._last_cleanup > 300:
-            self._aggregator.cleanup_old_windows()
-            self._last_cleanup = time.time()
-
-        window_key = self._aggregator._get_window_key(
-            event.get("timestamp", time.time())
-        )
-        window = self._aggregator._active_windows.get(window_key, {})
-        pattern_data = window.get(pattern_id, {})
-
-        if pattern_data.get("count", 0) >= self._auto_aggregate_threshold:
-            aggregated_events = self._aggregator.get_aggregated_events(window_key)
-            for agg_event in aggregated_events:
-                if agg_event.pattern_id == pattern_id:
-                    return agg_event
-
-        return None
-
-    def _extract_message(self, event: Dict[str, Any]) -> Optional[str]:
-        """Extract message from event."""
-        return self._aggregator._extract_message(event)
-
-    def enable(self) -> None:
-        """Enable aggregation."""
-        self._enabled = True
-
-    def disable(self) -> None:
-        """Disable aggregation."""
-        self._enabled = False
-
-    def get_aggregated_events(self) -> List[AggregatedEvent]:
-        """Get all aggregated events from current window."""
-        return self._aggregator.get_aggregated_events()
+        aggregation = self._active_aggregations[pattern_key]
+        return aggregation.to_dict()
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get aggregation statistics."""
-        stats = self._aggregator.get_statistics()
-        stats["enabled"] = self._enabled
-        stats["auto_threshold"] = self._auto_aggregate_threshold
-        return stats
+        return {
+            "events_processed": self._stats["events_processed"],
+            "events_aggregated": self._stats["events_aggregated"],
+            "patterns_created": self._stats["patterns_created"],
+            "patterns_expired": self._stats["patterns_expired"],
+            "active_patterns": len(self._active_aggregations),
+            "aggregation_threshold": self._aggregation_threshold,
+        }
+
+    def _extract_message(self, event: Dict[str, Any]) -> str:
+        """Extract message from event."""
+        message = event.get("message", "")
+        return message if isinstance(message, str) else ""
+
+    def _is_high_priority_event(self, event: Dict[str, Any]) -> bool:
+        """Check if event is high priority and should not be aggregated."""
+        # Don't aggregate error or critical events
+        level = event.get("level", "").upper()
+        if level in ["ERROR", "FATAL", "CRITICAL"]:
+            return True
+
+        # Don't aggregate events with stack traces
+        if any(field in event for field in ["stack_trace", "stacktrace", "exception"]):
+            return True
+
+        # Don't aggregate security-related events
+        message = self._extract_message(event).lower()
+        security_keywords = ["auth", "login", "security", "unauthorized", "forbidden", "breach"]
+        if any(keyword in message for keyword in security_keywords):
+            return True
+
+        return False
+
+    def _find_and_normalize_pattern(self, message: str) -> tuple[Optional[str], str, List[str]]:
+        """
+        Find matching pattern and normalize message.
+
+        Returns:
+            Tuple of (pattern_key, normalized_message, extracted_variables)
+        """
+        message_lower = message.lower()
+        
+        for pattern in self._patterns:
+            matches = list(pattern.normalizer.finditer(message_lower))
+            if matches:
+                # Extract variables and normalize message
+                variables = []
+                normalized = message_lower
+                
+                # Replace matches with placeholders (in reverse order to maintain positions)
+                for match in reversed(matches):
+                    variables.append(match.group())
+                    normalized = (
+                        normalized[:match.start()] +
+                        pattern.placeholder +
+                        normalized[match.end():]
+                    )
+                
+                # Create pattern key by combining pattern name and normalized message
+                pattern_key = f"{pattern.name}:{normalized}"
+                
+                return pattern_key, normalized, variables
+
+        # No pattern matched, return None
+        return None, message_lower, []
+
+    def _sanitize_event_for_sample(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a sanitized version of event for sample storage."""
+        # Keep only essential fields to avoid memory bloat
+        sample = {}
+        
+        keep_fields = [
+            "message", "level", "timestamp", "service", "user_id", 
+            "duration_ms", "status_code", "event_type"
+        ]
+        
+        for field in keep_fields:
+            if field in event:
+                sample[field] = event[field]
+                
+        return sample
+
+    def _cleanup_expired_patterns(self) -> None:
+        """Remove expired aggregation patterns."""
+        current_time = time.time()
+        expired_keys = []
+        
+        for pattern_key, aggregation in self._active_aggregations.items():
+            # Remove patterns older than 5 minutes
+            if current_time - aggregation.last_seen > 300:
+                expired_keys.append(pattern_key)
+        
+        for key in expired_keys:
+            del self._active_aggregations[key]
+            self._stats["patterns_expired"] += 1
+        
+        # If we still have too many patterns, remove oldest ones
+        if len(self._active_aggregations) > self._max_patterns:
+            # Sort by last seen time and remove oldest
+            sorted_patterns = sorted(
+                self._active_aggregations.items(),
+                key=lambda x: x[1].last_seen
+            )
+            
+            excess_count = len(self._active_aggregations) - self._max_patterns
+            for key, _ in sorted_patterns[:excess_count]:
+                del self._active_aggregations[key]
+                self._stats["patterns_expired"] += 1
+        
+        self._last_cleanup = current_time
+
+    def _build_aggregation_patterns(self) -> List[AggregationPattern]:
+        """Build the set of aggregation patterns."""
+        return [
+            # Database query patterns
+            AggregationPattern(
+                name="db_query",
+                normalizer=re.compile(r"\b\d+\b"),  # Replace numbers
+                placeholder="<NUM>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            AggregationPattern(
+                name="db_query_ids",
+                normalizer=re.compile(r"\b(id|user_id|order_id)\s*=\s*['\"]?[\w-]+['\"]?"),
+                placeholder="<ID>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            
+            # API request patterns
+            AggregationPattern(
+                name="api_request",
+                normalizer=re.compile(r"/api/\w+/[\w-]+"),  # API paths with IDs
+                placeholder="/api/<RESOURCE>/<ID>",
+                min_occurrences=10,
+                time_window_seconds=60,
+            ),
+            AggregationPattern(
+                name="api_params",
+                normalizer=re.compile(r"[?&]\w+=[^&\s]+"),  # Query parameters
+                placeholder="<PARAM>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            
+            # File operation patterns
+            AggregationPattern(
+                name="file_ops",
+                normalizer=re.compile(r"/[\w/.-]+\.(log|tmp|json|csv|xml)"),  # File paths
+                placeholder="<FILE>",
+                min_occurrences=5,
+                time_window_seconds=120,
+            ),
+            
+            # IP address patterns
+            AggregationPattern(
+                name="ip_addresses",
+                normalizer=re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+                placeholder="<IP>",
+                min_occurrences=10,
+                time_window_seconds=60,
+            ),
+            
+            # UUID/Hash patterns
+            AggregationPattern(
+                name="uuids",
+                normalizer=re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"),
+                placeholder="<UUID>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            AggregationPattern(
+                name="hashes",
+                normalizer=re.compile(r"\b[0-9a-f]{32,64}\b"),  # MD5/SHA hashes
+                placeholder="<HASH>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            
+            # Timestamp patterns
+            AggregationPattern(
+                name="timestamps",
+                normalizer=re.compile(r"\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}"),
+                placeholder="<TIMESTAMP>",
+                min_occurrences=10,
+                time_window_seconds=30,
+            ),
+            
+            # Duration/size patterns
+            AggregationPattern(
+                name="durations",
+                normalizer=re.compile(r"\b\d+\s*(ms|seconds?|minutes?|hours?)\b"),
+                placeholder="<DURATION>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+            AggregationPattern(
+                name="sizes",
+                normalizer=re.compile(r"\b\d+\s*(bytes?|kb|mb|gb)\b"),
+                placeholder="<SIZE>",
+                min_occurrences=5,
+                time_window_seconds=60,
+            ),
+        ]

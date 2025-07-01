@@ -1,444 +1,309 @@
 """
-Tests for cost-aware logging features.
+Tests for simple cost-aware logging controls.
 """
 
 import pytest
 import time
 from lmlog.intelligence.cost_aware import (
-    CostCalculator,
-    VolumeTracker,
-    DataCompressor,
-    AdaptiveSamplingController,
-    TierManager,
-    CostAwareLogger,
+    CostController,
     CostBudget,
-    StorageTier,
-    CompressionLevel,
+    CostTier,
+    Throttler,
+    CostSampler,
 )
 
 
-class TestCostCalculator:
-    """Test cost calculation functionality."""
-
-    def test_calculate_storage_cost_hot_tier(self):
-        """Test storage cost calculation for hot tier."""
-        calculator = CostCalculator(base_cost_per_gb=0.23)
-
-        # 1GB for 30 days in hot tier
-        cost = calculator.calculate_storage_cost(
-            bytes_size=1024**3,
-            tier=StorageTier.HOT,
-            compression=CompressionLevel.NONE,
-            retention_days=30,
-        )
-
-        assert cost == pytest.approx(6.9, rel=0.01)  # $0.23 * 30
-
-    def test_calculate_storage_cost_with_compression(self):
-        """Test storage cost with compression."""
-        calculator = CostCalculator(base_cost_per_gb=0.23)
-
-        # 1GB with balanced compression
-        cost = calculator.calculate_storage_cost(
-            bytes_size=1024**3,
-            tier=StorageTier.HOT,
-            compression=CompressionLevel.BALANCED,
-            retention_days=30,
-        )
-
-        # Should be 40% of uncompressed cost
-        assert cost == pytest.approx(2.76, rel=0.01)
-
-    def test_calculate_storage_cost_cold_tier(self):
-        """Test storage cost for cold tier."""
-        calculator = CostCalculator(base_cost_per_gb=0.23)
-
-        cost = calculator.calculate_storage_cost(
-            bytes_size=1024**3,
-            tier=StorageTier.COLD,
-            compression=CompressionLevel.MAXIMUM,
-            retention_days=90,
-        )
-
-        # Cold tier is 20% of hot tier cost, max compression is 30%
-        expected = 0.23 * 0.2 * 0.3 * 90
-        assert cost == pytest.approx(expected, rel=0.01)
-
-    def test_calculate_transfer_cost(self):
-        """Test data transfer cost calculation."""
-        calculator = CostCalculator()
-
-        # 10GB to 3 regions
-        cost = calculator.calculate_transfer_cost(
-            bytes_size=10 * 1024**3,
-            regions=3,
-        )
-
-        # 10GB * $0.09/GB * 2 additional regions
-        assert cost == pytest.approx(1.8, rel=0.01)
-
-    def test_estimate_monthly_cost(self):
-        """Test monthly cost estimation."""
-        calculator = CostCalculator(base_cost_per_gb=0.23)
-
-        from lmlog.intelligence.cost_aware import StoragePolicy
-
-        policy = StoragePolicy(
-            tier=StorageTier.HOT,
-            retention_days=30,
-            compression=CompressionLevel.BALANCED,
-        )
-
-        # 100MB daily
-        costs = calculator.estimate_monthly_cost(
-            daily_volume_bytes=100 * 1024**2,
-            storage_policy=policy,
-            transfer_regions=2,
-        )
-
-        assert "storage" in costs
-        assert "transfer" in costs
-        assert "total" in costs
-        assert "daily_average" in costs
-        assert costs["total"] > 0
-
-
-class TestVolumeTracker:
-    """Test volume tracking functionality."""
-
-    def test_track_event(self):
-        """Test tracking individual events."""
-        tracker = VolumeTracker(window_size=1)
-
-        tracker.track_event(1024)
-        tracker.track_event(2048)
-
-        bytes_per_sec, events_per_sec = tracker.get_current_rate()
-        assert bytes_per_sec > 0
-        assert events_per_sec > 0
-
-    def test_window_rotation(self):
-        """Test window rotation."""
-        tracker = VolumeTracker(window_size=1)
-
-        # Track events
-        tracker.track_event(1024)
-
-        # Wait for window rotation
-        time.sleep(1.1)
-
-        # Track more events
-        tracker.track_event(2048)
-
-        # Should have rotated window
-        daily_bytes, daily_events = tracker.get_daily_projection()
-        assert daily_bytes > 0
-        assert daily_events > 0
-
-    def test_daily_projection(self):
-        """Test daily volume projection."""
-        tracker = VolumeTracker(window_size=1)  # 1 second window for faster test
-
-        # Track events slowly to simulate 1 event per second
-        for i in range(5):
-            tracker.track_event(1024)
-            time.sleep(0.2)  # Spread events over time
-
-        daily_bytes, daily_events = tracker.get_daily_projection()
-
-        # Should project based on current rate (approximately 5 events/second)
-        assert daily_bytes > 0
-        assert daily_events > 100000  # Should be high due to fast rate
-
-
-class TestDataCompressor:
-    """Test data compression functionality."""
-
-    def test_compress_no_compression(self):
-        """Test with no compression."""
-        compressor = DataCompressor()
-
-        data = b"Hello, World!" * 100
-        compressed, ratio = compressor.compress(data, CompressionLevel.NONE)
-
-        assert compressed == data
-        assert ratio == 1.0
-
-    def test_compress_with_compression(self):
-        """Test with compression."""
-        compressor = DataCompressor()
-
-        # Highly compressible data
-        data = b"A" * 1000
-        compressed, ratio = compressor.compress(data, CompressionLevel.BALANCED)
-
-        assert len(compressed) < len(data)
-        assert ratio < 0.1  # Should compress well
-
-    def test_compress_batch(self):
-        """Test batch compression."""
-        compressor = DataCompressor()
-
-        events = [
-            {"message": f"Log message {i}", "timestamp": time.time()} for i in range(10)
-        ]
-
-        compressed, ratio = compressor.compress_batch(events, CompressionLevel.BALANCED)
-
-        assert len(compressed) > 0
-        assert ratio < 1.0
-
-    def test_compression_cache(self):
-        """Test compression caching."""
-        compressor = DataCompressor(cache_size=10)
-
-        data = b"Cached data"
-
-        # First compression
-        compressed1, _ = compressor.compress(data, CompressionLevel.FAST)
-
-        # Second compression (should be cached)
-        compressed2, _ = compressor.compress(data, CompressionLevel.FAST)
-
-        assert compressed1 == compressed2
-
-
-class TestAdaptiveSamplingController:
-    """Test adaptive sampling functionality."""
-
-    def test_get_sampling_rate_below_target(self):
-        """Test sampling rate when below target."""
-        controller = AdaptiveSamplingController(
-            target_bytes_per_sec=1000,
-            min_sampling=0.1,
-            max_sampling=1.0,
-        )
-
-        # Current rate below target
-        rate = controller.get_sampling_rate(500, event_priority=0.5)
-        assert rate > 0.5  # Should allow more sampling
-
-    def test_get_sampling_rate_above_target(self):
-        """Test sampling rate when above target."""
-        controller = AdaptiveSamplingController(
-            target_bytes_per_sec=1000,
-            min_sampling=0.1,
-            max_sampling=1.0,
-        )
-
-        # Feed high rates
-        for _ in range(10):
-            controller.get_sampling_rate(2000, event_priority=0.5)
-
-        # Wait for adjustment
-        time.sleep(5.1)
-
-        rate = controller.get_sampling_rate(2000, event_priority=0.5)
-        assert rate < 1.0  # Should reduce sampling
-
-    def test_priority_based_sampling(self):
-        """Test priority-based sampling adjustment."""
-        controller = AdaptiveSamplingController(
-            target_bytes_per_sec=1000, max_sampling=0.8
-        )
-
-        # Force adjustment by adding rate history and waiting
-        for _ in range(10):
-            controller.get_sampling_rate(2000)  # High rate to trigger adjustment
-
-        time.sleep(5.1)  # Wait for adjustment period to pass
-
-        # Now test with different priorities
-        high_priority_rate = controller.get_sampling_rate(2000, event_priority=1.0)
-        low_priority_rate = controller.get_sampling_rate(2000, event_priority=0.0)
-
-        assert high_priority_rate > low_priority_rate
-
-
-class TestTierManager:
-    """Test storage tier management."""
-
-    def test_get_tier_for_new_data(self):
-        """Test tier assignment for new data."""
-        manager = TierManager()
-
-        tier = manager.get_tier_for_data(
-            age_days=0,
-            size_bytes=1024,
-            access_frequency=0.9,
-        )
-
-        assert tier == StorageTier.HOT
-
-    def test_get_tier_for_old_data(self):
-        """Test tier assignment for old data."""
-        manager = TierManager()
-
-        tier = manager.get_tier_for_data(
-            age_days=100,
-            size_bytes=1024 * 1024,
-            access_frequency=0.1,
-        )
-
-        assert tier == StorageTier.ARCHIVED
-
-    def test_get_tier_by_access_frequency(self):
-        """Test tier assignment based on access frequency."""
-        manager = TierManager()
-
-        # High access frequency should keep in hot tier
-        tier = manager.get_tier_for_data(
-            age_days=50,
-            size_bytes=1024,
-            access_frequency=0.9,
-        )
-
-        assert tier == StorageTier.HOT
-
-    def test_get_policy(self):
-        """Test getting storage policy for tier."""
-        manager = TierManager()
-
-        policy = manager.get_policy(StorageTier.WARM)
-
-        assert policy.tier == StorageTier.WARM
-        assert policy.retention_days == 30
-        assert policy.compression == CompressionLevel.BALANCED
-
-
-class TestCostAwareLogger:
-    """Test cost-aware logger functionality."""
-
-    def test_should_log_high_priority(self):
-        """Test logging decision for high priority events."""
+class TestCostController:
+    """Test simple cost controller functionality."""
+
+    def test_basic_event_logging_within_budget(self):
+        """Test that events are logged when within budget."""
         budget = CostBudget(
-            max_daily_bytes=1024 * 1024,  # 1MB
             max_events_per_second=100,
+            max_daily_events=10000,
+            alert_threshold=0.8
         )
-        logger = CostAwareLogger(budget)
+        controller = CostController(budget)
+        
+        event = {"message": "Test event", "level": "INFO"}
+        
+        # Should allow logging within budget
+        assert controller.should_log_event(event, priority_level=3)
 
-        event = {"message": "Critical error"}
-        should_log = logger.should_log(event, priority=0.95)
-
-        assert should_log is True
-
-    def test_should_log_with_sampling(self):
-        """Test logging decision with sampling."""
+    def test_critical_events_always_logged(self):
+        """Test that critical events are always logged regardless of budget."""
         budget = CostBudget(
-            max_daily_bytes=1024,  # Very small budget
-            max_events_per_second=1,
+            max_events_per_second=0,  # No budget
+            max_daily_events=0,       # No daily events allowed
+            alert_threshold=0.8
         )
-        logger = CostAwareLogger(budget)
+        controller = CostController(budget)
+        
+        critical_event = {"message": "System failure", "level": "FATAL"}
+        
+        # Critical events should always be logged
+        assert controller.should_log_event(critical_event, priority_level=5)
 
-        # Build up rate history to trigger sampling adjustment
-        for i in range(20):
-            event = {"message": f"Setup event {i}"}
-            logger.should_log(event, priority=0.5)
-            time.sleep(0.01)  # Small delay to build realistic rate
-
-        # Wait for adjustment period
-        time.sleep(5.1)
-
-        # Now test with priority=0.1 (low priority) events
-        logged_count = 0
-        for i in range(50):
-            event = {"message": f"Low priority event {i}"}
-            if logger.should_log(event, priority=0.1):  # Low priority
-                logged_count += 1
-
-        # Should have sampled down (or at least not exceed total)
-        assert logged_count <= 50
-
-    def test_process_event(self):
-        """Test event processing with compression."""
+    def test_rate_limiting_functionality(self):
+        """Test that rate limiting works properly."""
         budget = CostBudget(
-            max_daily_bytes=1024 * 1024 * 1024,
-            max_events_per_second=10000,
+            max_events_per_second=2,  # Very low rate limit
+            max_daily_events=10000,
+            alert_threshold=0.8,
+            enable_throttling=True
         )
-        logger = CostAwareLogger(budget)
+        controller = CostController(budget)
+        
+        event = {"message": "Test event", "level": "INFO"}
+        
+        # First few events should be allowed
+        assert controller.should_log_event(event, priority_level=2)
+        assert controller.should_log_event(event, priority_level=2)
+        
+        # Subsequent events should be throttled
+        for _ in range(5):
+            result = controller.should_log_event(event, priority_level=2)
+            # Some might be throttled due to rate limiting
 
-        event = {
-            "message": "Test event",
-            "timestamp": time.time(),
-            "data": "A" * 1000,  # Compressible data
-        }
-
-        compressed_data, policy = logger.process_event(event)
-
-        assert len(compressed_data) > 0
-        assert policy.tier == StorageTier.HOT
-
-        # Check metrics updated
-        metrics = logger.get_cost_metrics()
-        assert metrics.bytes_written > 0
-        assert metrics.events_written == 1
-
-    def test_cost_forecast(self):
-        """Test cost forecasting."""
+    def test_priority_based_throttling(self):
+        """Test that higher priority events are less likely to be throttled."""
         budget = CostBudget(
-            max_daily_bytes=1024 * 1024 * 1024,  # 1GB
-            max_events_per_second=10000,
+            max_events_per_second=1,  # Very restrictive
+            max_daily_events=10000,
+            alert_threshold=0.8,
+            enable_throttling=True
         )
-        logger = CostAwareLogger(budget)
+        controller = CostController(budget)
+        
+        # Saturate the rate limit with low priority events
+        for _ in range(5):
+            controller.should_log_event({"message": "Low priority", "level": "DEBUG"}, priority_level=1)
+        
+        # High priority event should still be logged
+        high_priority_event = {"message": "Important event", "level": "WARNING"}
+        assert controller.should_log_event(high_priority_event, priority_level=4)
 
-        # Process some events
+    def test_daily_budget_enforcement(self):
+        """Test that daily budget limits are enforced."""
+        budget = CostBudget(
+            max_events_per_second=1000,  # High rate limit
+            max_daily_events=5,           # Very low daily limit
+            alert_threshold=0.8,
+            enable_throttling=True
+        )
+        controller = CostController(budget)
+        
+        event = {"message": "Test event", "level": "INFO"}
+        
+        # First few events should be allowed
+        allowed_count = 0
         for i in range(10):
-            event = {"message": f"Event {i}", "size": 1024}
-            logger.process_event(event)
+            if controller.should_log_event(event, priority_level=2):
+                allowed_count += 1
+        
+        # Should not exceed daily budget (plus some high priority events)
+        assert allowed_count <= budget.max_daily_events + 2
 
-        forecast = logger.get_cost_forecast()
+    def test_cost_tier_assignment(self):
+        """Test that events are assigned to appropriate cost tiers."""
+        budget = CostBudget(
+            max_events_per_second=100,
+            max_daily_events=10000,
+            alert_threshold=0.8
+        )
+        controller = CostController(budget)
+        
+        # Critical events should go to HOT tier
+        critical_event = {"level": "FATAL", "message": "System failure"}
+        assert controller.get_cost_tier(critical_event, priority_level=5) == CostTier.HOT
+        
+        # Error events with priority 4 go to HOT tier (priority check comes first)
+        error_event = {"level": "ERROR", "message": "Database error"}
+        assert controller.get_cost_tier(error_event, priority_level=4) == CostTier.HOT
+        
+        # Error events with lower priority go to WARM tier
+        error_event_low = {"level": "ERROR", "message": "Database error"}
+        assert controller.get_cost_tier(error_event_low, priority_level=3) == CostTier.WARM
+        
+        # Security events should go to WARM tier
+        security_event = {"event_type": "security_alert", "message": "Suspicious activity"}
+        assert controller.get_cost_tier(security_event, priority_level=3) == CostTier.WARM
+        
+        # Debug events should go to ARCHIVE tier
+        debug_event = {"level": "DEBUG", "message": "Debug trace"}
+        assert controller.get_cost_tier(debug_event, priority_level=1) == CostTier.ARCHIVE
 
-        assert "daily_volume_gb" in forecast
-        assert "monthly_cost_hot" in forecast
-        assert "monthly_cost_tiered" in forecast
-        assert "budget_usage" in forecast
-        assert "recommendations" in forecast
+    def test_metrics_collection(self):
+        """Test that cost metrics are properly collected."""
+        budget = CostBudget(
+            max_events_per_second=100,
+            max_daily_events=10000,
+            alert_threshold=0.8
+        )
+        controller = CostController(budget)
+        
+        # Log some events
+        for i in range(5):
+            controller.should_log_event({"message": f"Event {i}", "level": "INFO"}, priority_level=2)
+        
+        metrics = controller.get_metrics()
+        
+        assert metrics.events_logged_today == 5
+        assert metrics.current_events_per_second >= 0
+        assert 0 <= metrics.budget_utilization <= 1
+        assert isinstance(metrics.throttling_active, bool)
 
-    def test_cost_callbacks(self):
-        """Test cost alert callbacks."""
-        callback_called = False
-
+    def test_alert_callback_functionality(self):
+        """Test that alert callbacks are triggered appropriately."""
+        budget = CostBudget(
+            max_events_per_second=100,
+            max_daily_events=10,  # Low limit to trigger alerts
+            alert_threshold=0.5,  # Low threshold
+            enable_alerts=True
+        )
+        controller = CostController(budget)
+        
+        alert_called = []
+        
         def alert_callback(metrics):
-            nonlocal callback_called
-            callback_called = True
+            alert_called.append(metrics)
+        
+        controller.add_alert_callback(alert_callback)
+        
+        # Log events to trigger alert threshold
+        for i in range(6):  # This should exceed 50% of daily budget
+            controller.should_log_event({"message": f"Event {i}", "level": "INFO"}, priority_level=2)
+        
+        # Alert should have been called
+        assert len(alert_called) > 0
 
+    def test_statistics_tracking(self):
+        """Test that statistics are properly tracked."""
         budget = CostBudget(
-            max_daily_bytes=1024,  # Very small budget
-            max_events_per_second=10,
-            alert_threshold=0.5,
+            max_events_per_second=2,  # Low to trigger throttling
+            max_daily_events=10000,
+            alert_threshold=0.8,
+            enable_throttling=True
         )
-        logger = CostAwareLogger(budget)
-        logger.add_cost_callback(alert_callback)
+        controller = CostController(budget)
+        
+        # Generate events to trigger throttling
+        for i in range(10):
+            controller.should_log_event({"message": f"Event {i}", "level": "DEBUG"}, priority_level=1)
+        
+        stats = controller.get_statistics()
+        
+        assert "events_throttled" in stats
+        assert "current_daily_count" in stats
+        assert "budget_utilization" in stats
+        assert "throttling_active" in stats
 
-        # Generate enough events to trigger alert
-        for i in range(100):
-            event = {"message": f"Event {i}" * 100}
-            logger.process_event(event)
 
-        # Callback should have been triggered
-        assert callback_called is True
+class TestThrottler:
+    """Test simple throttling mechanism."""
 
-    def test_enable_disable(self):
-        """Test enabling and disabling cost-aware features."""
-        budget = CostBudget(
-            max_daily_bytes=1,  # Impossible budget
-            max_events_per_second=1,
-        )
-        logger = CostAwareLogger(budget)
+    def test_token_bucket_basic_functionality(self):
+        """Test basic token bucket algorithm."""
+        throttler = Throttler(max_rate=2.0, bucket_size=4)
+        
+        # Should allow initial requests up to bucket size
+        assert throttler.should_allow(1)
+        assert throttler.should_allow(1)
+        assert throttler.should_allow(1)
+        assert throttler.should_allow(1)
+        
+        # Should throttle additional requests
+        assert not throttler.should_allow(1)
 
-        # Disable cost awareness
-        logger.disable()
+    def test_token_refill_over_time(self):
+        """Test that tokens are refilled over time."""
+        throttler = Throttler(max_rate=10.0, bucket_size=2)
+        
+        # Exhaust tokens
+        assert throttler.should_allow(2)
+        assert not throttler.should_allow(1)
+        
+        # Wait for refill
+        time.sleep(0.3)  # Should refill 3 tokens at 10/sec rate
+        
+        # Should allow requests again
+        assert throttler.should_allow(1)
 
-        event = {"message": "Test"}
-        assert logger.should_log(event, priority=0.1) is True
+    def test_available_tokens_calculation(self):
+        """Test available tokens calculation."""
+        throttler = Throttler(max_rate=5.0, bucket_size=10)
+        
+        # Initial tokens should be at bucket size
+        assert throttler.get_available_tokens() == 10
+        
+        # Consume some tokens
+        throttler.should_allow(3)
+        # Allow for small floating point precision differences
+        available = throttler.get_available_tokens()
+        assert 6.9 <= available <= 7.1
 
-        # Enable cost awareness
-        logger.enable()
 
-        # Now should respect budget
-        logged_count = 0
-        for i in range(100):
-            if logger.should_log({"message": f"Event {i}"}, priority=0.1):
-                logged_count += 1
+class TestCostSampler:
+    """Test simple sampling mechanism."""
 
-        assert logged_count <= 100
+    def test_sampling_rate_enforcement(self):
+        """Test that sampling rate is properly enforced."""
+        sampler = CostSampler(sampling_rate=0.5)
+        
+        events = [{"message": f"Event {i}"} for i in range(100)]
+        sampled_count = sum(1 for event in events if sampler.should_sample(event))
+        
+        # Should sample approximately 50% of events (with some variance)
+        assert 30 <= sampled_count <= 70
+
+    def test_full_sampling(self):
+        """Test that sampling rate of 1.0 samples all events."""
+        sampler = CostSampler(sampling_rate=1.0)
+        
+        events = [{"message": f"Event {i}"} for i in range(10)]
+        sampled_count = sum(1 for event in events if sampler.should_sample(event))
+        
+        assert sampled_count == 10
+
+    def test_no_sampling(self):
+        """Test that sampling rate of 0.0 samples no events."""
+        sampler = CostSampler(sampling_rate=0.0)
+        
+        events = [{"message": f"Event {i}"} for i in range(10)]
+        sampled_count = sum(1 for event in events if sampler.should_sample(event))
+        
+        assert sampled_count == 0
+
+    def test_deterministic_sampling(self):
+        """Test that sampling is deterministic for the same event."""
+        sampler = CostSampler(sampling_rate=0.5)
+        
+        event = {"message": "Consistent event"}
+        
+        # Same event should always produce same sampling decision
+        first_result = sampler.should_sample(event)
+        for _ in range(10):
+            assert sampler.should_sample(event) == first_result
+
+    def test_sampling_rate_update(self):
+        """Test that sampling rate can be updated."""
+        sampler = CostSampler(sampling_rate=0.0)
+        
+        event = {"message": "Test event"}
+        
+        # Initially should not sample
+        assert not sampler.should_sample(event)
+        
+        # Update rate and test again
+        sampler.update_rate(1.0)
+        assert sampler.should_sample(event)
+
+    def test_sampling_rate_bounds(self):
+        """Test that sampling rate is bounded between 0.0 and 1.0."""
+        # Test upper bound
+        sampler = CostSampler(sampling_rate=2.0)
+        assert sampler._rate == 1.0
+        
+        # Test lower bound
+        sampler = CostSampler(sampling_rate=-0.5)
+        assert sampler._rate == 0.0

@@ -8,6 +8,7 @@ enabling better debugging assistance across any Python codebase.
 # Core functionality
 from .core.base_logger import LLMLogger
 from .core.logger import LMLogger
+from .core.legacy_logger import LegacyLMLogger
 from .core.config import LLMLoggerConfig
 from .core.serializers import FastJSONEncoder, MsgSpecEncoder
 
@@ -25,18 +26,28 @@ from .processing.backends import (
 )
 from .processing.pools import ObjectPool, EventPool, StringPool, BufferPool
 
-# Intelligence
-from .intelligence.classification import (
-    IntelligentEventClassifier,
+# Rule-based Intelligence
+from .intelligence.rules import (
+    RuleBasedClassifier,
     EventType,
     EventPriority,
     EventClassification,
 )
-from .intelligence.aggregation import SmartAggregator, AggregatedEvent, PatternDetector
+from .intelligence.aggregation import PatternBasedAggregator, AggregatedEvent
 from .intelligence.cost_aware import (
-    CostAwareLogger,
+    CostController,
     CostBudget,
     CostMetrics,
+    CostTier,
+    Throttler,
+    CostSampler,
+)
+
+# Legacy ML-based Intelligence (kept for backward compatibility)
+from .intelligence.classification import IntelligentEventClassifier
+from .intelligence.legacy_ml_cost_aware import (
+    CostAwareLogger,
+    CostBudget as LegacyCostBudget,
     StorageTier,
     CompressionLevel,
 )
@@ -61,7 +72,8 @@ __version__ = "0.4.0"
 __all__ = [
     # Core loggers
     "LLMLogger",
-    "LMLogger",
+    "LMLogger",  # Rule-based intelligence logger
+    "LegacyLMLogger",  # Legacy ML-based logger
     # Configuration
     "LLMLoggerConfig",
     # Serializers
@@ -79,17 +91,23 @@ __all__ = [
     "EventPool",
     "StringPool",
     "BufferPool",
-    # Intelligence
-    "IntelligentEventClassifier",
+    # Rule-based Intelligence (recommended)
+    "RuleBasedClassifier",
     "EventType",
-    "EventPriority",
+    "EventPriority", 
     "EventClassification",
-    "SmartAggregator",
+    "PatternBasedAggregator",
     "AggregatedEvent",
-    "PatternDetector",
-    "CostAwareLogger",
+    "CostController",
     "CostBudget",
     "CostMetrics",
+    "CostTier",
+    "Throttler",
+    "CostSampler",
+    # Legacy ML Intelligence (backward compatibility)
+    "IntelligentEventClassifier",
+    "CostAwareLogger",
+    "LegacyCostBudget",
     "StorageTier",
     "CompressionLevel",
     "Sampler",

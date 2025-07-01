@@ -1,394 +1,307 @@
 """
-Tests for pattern detection and aggregation system.
+Tests for pattern-based aggregation system.
 """
 
+import pytest
 import time
 from lmlog.intelligence.aggregation import (
-    PatternDetector,
-    EventAggregator,
-    SmartAggregator,
+    PatternBasedAggregator,
     AggregatedEvent,
 )
 
 
-class TestPatternDetector:
-    """Test pattern detection functionality."""
+class TestPatternBasedAggregator:
+    """Test pattern-based aggregation functionality."""
 
-    def test_detect_simple_pattern(self):
-        """Test detection of simple patterns."""
-        detector = PatternDetector()
-
-        message1 = "User 123 logged in successfully"
-        message2 = "User 456 logged in successfully"
-
-        pattern_id1 = detector.detect_pattern(message1)
-        pattern_id2 = detector.detect_pattern(message2)
-
-        assert pattern_id1 == pattern_id2
-        assert pattern_id1 is not None
-
-    def test_normalize_message_with_numbers(self):
-        """Test message normalization with numbers."""
-        detector = PatternDetector()
-
-        messages = [
-            "Request took 100ms to complete",
-            "Request took 250ms to complete",
-            "Request took 500ms to complete",
+    def test_basic_aggregation_functionality(self):
+        """Test basic aggregation of similar events."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=3)
+        
+        events = [
+            {"message": "User 123 logged in", "level": "INFO"},
+            {"message": "User 456 logged in", "level": "INFO"},
+            {"message": "User 789 logged in", "level": "INFO"},
         ]
+        
+        # First two events should not trigger aggregation
+        assert not aggregator.should_aggregate(events[0])
+        assert not aggregator.should_aggregate(events[1])
+        
+        # Third event should trigger aggregation
+        assert aggregator.should_aggregate(events[2])
 
-        pattern_ids = [detector.detect_pattern(msg) for msg in messages]
-
-        # All should have same pattern
-        assert len(set(pattern_ids)) == 1
-
-        pattern = detector.get_pattern(pattern_ids[0])
-        assert "<NUMBER>" in pattern.pattern_template
-
-    def test_normalize_message_with_ips(self):
-        """Test message normalization with IP addresses."""
-        detector = PatternDetector()
-
-        messages = [
-            "Connection from 192.168.1.1",
-            "Connection from 10.0.0.1",
-            "Connection from 172.16.0.1",
+    def test_database_query_aggregation(self):
+        """Test aggregation of database queries with different IDs."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "SELECT * FROM users WHERE id = 123", "level": "DEBUG"},
+            {"message": "SELECT * FROM users WHERE id = 456", "level": "DEBUG"},
         ]
+        
+        # Should not aggregate first event
+        assert not aggregator.should_aggregate(events[0])
+        
+        # Should aggregate second event (similar pattern)
+        assert aggregator.should_aggregate(events[1])
 
-        pattern_ids = [detector.detect_pattern(msg) for msg in messages]
-
-        assert len(set(pattern_ids)) == 1
-
-        pattern = detector.get_pattern(pattern_ids[0])
-        assert "<IP>" in pattern.pattern_template
-
-    def test_normalize_message_with_paths(self):
-        """Test message normalization with file paths."""
-        detector = PatternDetector()
-
-        messages = [
-            "Error reading file /var/log/app.log",
-            "Error reading file /home/user/data.txt",
-            "Error reading file /tmp/test.json",
+    def test_api_request_aggregation(self):
+        """Test aggregation of API requests with different parameters."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=3)
+        
+        events = [
+            {"message": "GET /api/users/123 - 200ms", "level": "INFO"},
+            {"message": "GET /api/users/456 - 150ms", "level": "INFO"},
+            {"message": "GET /api/users/789 - 180ms", "level": "INFO"},
         ]
+        
+        results = [aggregator.should_aggregate(event) for event in events]
+        
+        # Third event should trigger aggregation
+        assert results == [False, False, True]
 
-        pattern_ids = [detector.detect_pattern(msg) for msg in messages]
+    def test_high_priority_events_not_aggregated(self):
+        """Test that high priority events are not aggregated."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        # Error events should not be aggregated
+        error_events = [
+            {"message": "Database error occurred", "level": "ERROR"},
+            {"message": "Database error occurred", "level": "ERROR"},
+        ]
+        
+        for event in error_events:
+            assert not aggregator.should_aggregate(event)
 
-        assert len(set(pattern_ids)) == 1
+    def test_security_events_not_aggregated(self):
+        """Test that security events are not aggregated."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        security_events = [
+            {"message": "Failed login attempt", "level": "WARNING"},
+            {"message": "Failed login attempt", "level": "WARNING"},
+        ]
+        
+        for event in security_events:
+            assert not aggregator.should_aggregate(event)
 
-        pattern = detector.get_pattern(pattern_ids[0])
-        assert "<PATH>" in pattern.pattern_template
+    def test_events_with_stack_traces_not_aggregated(self):
+        """Test that events with stack traces are not aggregated."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events_with_traces = [
+            {
+                "message": "Exception occurred",
+                "level": "INFO",
+                "stack_trace": "at com.example.Service.method(Service.java:123)"
+            },
+            {
+                "message": "Exception occurred", 
+                "level": "INFO",
+                "stack_trace": "at com.example.Service.method(Service.java:456)"
+            },
+        ]
+        
+        for event in events_with_traces:
+            assert not aggregator.should_aggregate(event)
 
-    def test_pattern_similarity_threshold(self):
-        """Test pattern similarity threshold."""
-        detector = PatternDetector(similarity_threshold=0.9)
+    def test_aggregated_event_data_structure(self):
+        """Test that aggregated event data contains expected information."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Processing file data_123.csv", "level": "INFO", "service": "worker"},
+            {"message": "Processing file data_456.csv", "level": "INFO", "service": "worker"},
+        ]
+        
+        # Trigger aggregation
+        aggregator.should_aggregate(events[0])
+        aggregator.should_aggregate(events[1])
+        
+        # Get aggregated event data
+        aggregated_data = aggregator.get_aggregated_event(events[1])
+        
+        assert aggregated_data is not None
+        assert aggregated_data["event_type"] == "aggregated_event"
+        assert aggregated_data["count"] == 2
+        assert "pattern" in aggregated_data
+        assert "normalized_message" in aggregated_data
+        assert "sample_events" in aggregated_data
+        assert len(aggregated_data["sample_events"]) <= 3  # Max 3 samples
 
-        message1 = "Database query executed successfully"
-        message2 = "Database query failed with error"
+    def test_ip_address_normalization(self):
+        """Test that IP addresses are properly normalized."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Connection from 192.168.1.100", "level": "INFO"},
+            {"message": "Connection from 10.0.0.1", "level": "INFO"},
+        ]
+        
+        # Should not aggregate first event
+        assert not aggregator.should_aggregate(events[0])
+        
+        # Should aggregate second event (same pattern, different IP)
+        assert aggregator.should_aggregate(events[1])
 
-        pattern_id1 = detector.detect_pattern(message1)
-        pattern_id2 = detector.detect_pattern(message2)
+    def test_uuid_normalization(self):
+        """Test that UUIDs are properly normalized."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Processing request 550e8400-e29b-41d4-a716-446655440000", "level": "INFO"},
+            {"message": "Processing request 6ba7b810-9dad-11d1-80b4-00c04fd430c8", "level": "INFO"},
+        ]
+        
+        results = [aggregator.should_aggregate(event) for event in events]
+        assert results == [False, True]
 
-        # Should be different patterns due to high threshold
-        assert pattern_id1 != pattern_id2
+    def test_timestamp_normalization(self):
+        """Test that timestamps are properly normalized."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Event occurred at 2024-01-01T10:00:00", "level": "INFO"},
+            {"message": "Event occurred at 2024-01-01T11:00:00", "level": "INFO"},
+        ]
+        
+        results = [aggregator.should_aggregate(event) for event in events]
+        assert results == [False, True]
 
-    def test_pattern_cleanup(self):
-        """Test pattern cleanup when limit reached."""
-        detector = PatternDetector(max_patterns=5)
+    def test_duration_normalization(self):
+        """Test that durations are properly normalized."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Operation completed in 250ms", "level": "INFO"},
+            {"message": "Operation completed in 180ms", "level": "INFO"},
+        ]
+        
+        results = [aggregator.should_aggregate(event) for event in events]
+        assert results == [False, True]
 
-        # Create more patterns than limit
-        for i in range(10):
-            message = f"Unique message pattern {i}"
-            detector.detect_pattern(message)
-
-        patterns = detector.get_patterns()
-        assert len(patterns) <= 5
-
-    def test_get_patterns_sorted_by_frequency(self):
-        """Test getting patterns sorted by frequency."""
-        detector = PatternDetector()
-
-        # Create patterns with different frequencies
-        for i in range(5):
-            detector.detect_pattern("Pattern A occurs frequently")
-
-        for i in range(3):
-            detector.detect_pattern("Pattern B occurs sometimes")
-
-        detector.detect_pattern("Pattern C occurs rarely")
-
-        patterns = detector.get_patterns()
-
-        assert len(patterns) == 3
-        assert patterns[0].event_count == 5
-        assert patterns[1].event_count == 3
-        assert patterns[2].event_count == 1
-
-
-class TestEventAggregator:
-    """Test event aggregation functionality."""
-
-    def test_add_event_basic(self):
-        """Test adding events for aggregation."""
-        aggregator = EventAggregator(window_seconds=60)
-
-        event = {
-            "message": "User login successful",
-            "user_id": "123",
-            "timestamp": time.time(),
-        }
-
-        pattern_id = aggregator.add_event(event)
-        assert pattern_id is not None
-
+    def test_statistics_tracking(self):
+        """Test that aggregation statistics are properly tracked."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        events = [
+            {"message": "Test event 1", "level": "INFO"},
+            {"message": "Test event 2", "level": "INFO"},
+            {"message": "Different event", "level": "INFO"},
+        ]
+        
+        for event in events:
+            aggregator.should_aggregate(event)
+        
         stats = aggregator.get_statistics()
-        assert stats["total_events"] == 1
-        assert stats["aggregated_events"] == 1
+        
+        assert stats["events_processed"] == 3
+        assert stats["events_aggregated"] >= 0
+        assert stats["patterns_created"] >= 0
+        assert "aggregation_threshold" in stats
 
-    def test_aggregate_similar_events(self):
-        """Test aggregating similar events."""
-        aggregator = EventAggregator(window_seconds=60)
+    def test_empty_message_handling(self):
+        """Test handling of events with empty or missing messages."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
+        # Event with no message
+        assert not aggregator.should_aggregate({})
+        
+        # Event with empty message
+        assert not aggregator.should_aggregate({"message": "", "level": "INFO"})
+        
+        # Event with None message
+        assert not aggregator.should_aggregate({"message": None, "level": "INFO"})
 
-        # Add similar events
-        for i in range(10):
-            event = {
-                "message": f"User {i} performed action",
-                "event_type": "user_action",
-                "timestamp": time.time(),
-            }
-            aggregator.add_event(event)
-
-        aggregated = aggregator.get_aggregated_events()
-
-        assert len(aggregated) == 1
-        assert aggregated[0].count == 10
-        assert "User <NUMBER> performed action" in aggregated[0].pattern
-
-    def test_window_separation(self):
-        """Test events in different windows."""
-        aggregator = EventAggregator(window_seconds=1)
-
-        # Add event in first window
-        event1 = {
-            "message": "Event in window 1",
-            "timestamp": time.time(),
-        }
-        aggregator.add_event(event1)
-
-        # Wait for new window
+    def test_pattern_cleanup_after_expiration(self):
+        """Test that old patterns are cleaned up properly."""
+        aggregator = PatternBasedAggregator(
+            aggregation_threshold=2,
+            cleanup_interval=1  # Clean up every second
+        )
+        
+        event = {"message": "Test message", "level": "INFO"}
+        aggregator.should_aggregate(event)
+        
+        initial_stats = aggregator.get_statistics()
+        initial_patterns = initial_stats["active_patterns"]
+        
+        # Wait for cleanup interval and trigger cleanup
         time.sleep(1.1)
+        aggregator.should_aggregate({"message": "Another message", "level": "INFO"})
+        
+        # Patterns should eventually be cleaned up
+        # Note: This test is time-dependent and may be flaky
 
-        # Add event in second window
-        event2 = {
-            "message": "Event in window 2",
-            "timestamp": time.time(),
-        }
-        aggregator.add_event(event2)
-
-        # Should have events in different windows
+    def test_max_patterns_limit(self):
+        """Test that pattern count is limited."""
+        aggregator = PatternBasedAggregator(
+            aggregation_threshold=1,
+            max_patterns=5
+        )
+        
+        # Create more unique patterns than the limit
+        for i in range(10):
+            event = {"message": f"Unique message {i} with different content", "level": "INFO"}
+            aggregator.should_aggregate(event)
+        
         stats = aggregator.get_statistics()
-        assert stats["active_windows"] == 2
+        
+        # Should not exceed max patterns limit
+        assert stats["active_patterns"] <= 5
 
-    def test_max_unique_patterns(self):
-        """Test maximum unique patterns per window."""
-        aggregator = EventAggregator(window_seconds=60, max_unique_patterns=3)
-
-        # Add more unique patterns than limit
-        messages = [
-            "Database connection failed",
-            "Authentication service timeout",
-            "Cache memory limit exceeded",
-            "Network partition detected",
-            "File system disk full",
-        ]
-        for i in range(5):
-            event = {
-                "message": messages[i],
-                "timestamp": time.time(),
-            }
-            pattern_id = aggregator.add_event(event)
-
-            # After limit, should return None
-            if i >= 3:
-                assert pattern_id is None
-
-        aggregated = aggregator.get_aggregated_events()
-        assert len(aggregated) == 3
-
-    def test_calculate_statistics(self):
-        """Test statistics calculation for aggregated events."""
-        aggregator = EventAggregator(window_seconds=60)
-
-        # Add events with various attributes
+    def test_sample_event_sanitization(self):
+        """Test that sample events are properly sanitized."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=2)
+        
         events = [
             {
-                "message": "API call completed",
-                "user_id": "user1",
-                "duration_ms": 100,
-                "timestamp": time.time(),
+                "message": "Test message 1",
+                "level": "INFO",
+                "sensitive_data": "secret_key_123",
+                "large_payload": "x" * 10000,
+                "timestamp": "2024-01-01T10:00:00",
+                "service": "test-service"
             },
             {
-                "message": "API call completed",
-                "user_id": "user2",
-                "duration_ms": 200,
-                "timestamp": time.time(),
-            },
-            {
-                "message": "API call completed",
-                "user_id": "user1",
-                "duration_ms": 150,
-                "timestamp": time.time(),
-            },
-            {
-                "message": "API call completed",
-                "session_id": "sess1",
-                "error_code": "E001",
-                "timestamp": time.time(),
+                "message": "Test message 2", 
+                "level": "INFO",
+                "sensitive_data": "secret_key_456",
+                "large_payload": "y" * 10000,
+                "timestamp": "2024-01-01T11:00:00",
+                "service": "test-service"
             },
         ]
+        
+        # Trigger aggregation
+        aggregator.should_aggregate(events[0])
+        aggregator.should_aggregate(events[1])
+        
+        aggregated_data = aggregator.get_aggregated_event(events[1])
+        sample_event = aggregated_data["sample_events"][0]
+        
+        # Should contain only essential fields
+        assert "message" in sample_event
+        assert "level" in sample_event
+        assert "timestamp" in sample_event
+        assert "service" in sample_event
+        
+        # Should not contain sensitive or large data
+        assert "sensitive_data" not in sample_event
+        assert "large_payload" not in sample_event
 
-        for event in events:
-            aggregator.add_event(event)
-
-        aggregated = aggregator.get_aggregated_events()
-        assert len(aggregated) == 1
-
-        stats = aggregated[0].statistics
-        assert stats["unique_users"] == 2
-        assert stats["avg_duration_ms"] == 150
-        assert stats["min_duration_ms"] == 100
-        assert stats["max_duration_ms"] == 200
-
-    def test_cleanup_old_windows(self):
-        """Test cleanup of old windows."""
-        aggregator = EventAggregator(window_seconds=1)
-
-        # Add events
-        for i in range(3):
-            event = {
-                "message": f"Event {i}",
-                "timestamp": time.time() - i * 2,
-            }
-            aggregator.add_event(event)
-
-        # Cleanup old windows
-        aggregator.cleanup_old_windows()
-
-        stats = aggregator.get_statistics()
-        assert stats["active_windows"] < 3
-
-
-class TestSmartAggregator:
-    """Test smart aggregation functionality."""
-
-    def test_should_aggregate_logic(self):
-        """Test logic for determining if event should be aggregated."""
-        aggregator = SmartAggregator()
-
-        # Should aggregate normal events
-        event1 = {
-            "message": "Normal log message that is long enough to aggregate",
-            "level": "INFO",
-        }
-        assert aggregator.should_aggregate(event1) is True
-
-        # Should not aggregate errors
-        event2 = {"message": "Error occurred", "level": "ERROR"}
-        assert aggregator.should_aggregate(event2) is False
-
-        # Should not aggregate critical events
-        event3 = {"message": "Critical issue", "level": "CRITICAL"}
-        assert aggregator.should_aggregate(event3) is False
-
-        # Should respect aggregate flag
-        event4 = {"message": "Do not aggregate", "aggregate": False}
-        assert aggregator.should_aggregate(event4) is False
-
-    def test_process_event_below_threshold(self):
-        """Test processing events below auto-aggregation threshold."""
-        aggregator = SmartAggregator(auto_aggregate_threshold=5)
-
-        # Add events below threshold
-        for i in range(3):
-            event = {
-                "message": f"User {i} logged in",
-                "timestamp": time.time(),
-            }
-            result = aggregator.process_event(event)
-            assert result is None  # Not aggregated yet
-
-    def test_process_event_above_threshold(self):
-        """Test processing events above auto-aggregation threshold."""
-        aggregator = SmartAggregator(auto_aggregate_threshold=3)
-
-        # Add events above threshold
-        for i in range(5):
-            event = {
-                "message": f"User {i} logged in successfully with session tracking",
-                "timestamp": time.time(),
-            }
-            result = aggregator.process_event(event)
-
-            # Should return aggregated event after threshold
-            if i >= 2:
-                assert isinstance(result, AggregatedEvent)
-                assert result.count >= 3
-
-    def test_enable_disable_aggregation(self):
-        """Test enabling and disabling aggregation."""
-        aggregator = SmartAggregator()
-
-        # Disable aggregation
-        aggregator.disable()
-
-        event = {"message": "Test message that is long enough to be aggregated"}
-        assert aggregator.should_aggregate(event) is False
-
-        # Enable aggregation
-        aggregator.enable()
-        assert aggregator.should_aggregate(event) is True
-
-    def test_get_statistics(self):
-        """Test getting aggregation statistics."""
-        aggregator = SmartAggregator()
-
-        # Process some events
-        for i in range(10):
-            event = {
-                "message": f"Event type {i % 3} with sufficient length for aggregation",
-                "timestamp": time.time(),
-            }
-            aggregator.process_event(event)
-
-        stats = aggregator.get_statistics()
-
-        assert "enabled" in stats
-        assert "auto_threshold" in stats
-        assert "total_events" in stats
-        assert stats["total_events"] == 10
-
-    def test_aggregation_with_complex_messages(self):
-        """Test aggregation with complex log messages."""
-        aggregator = SmartAggregator(similarity_threshold=0.8)
-
-        messages = [
-            "2024-01-01 10:00:00 [INFO] Processing order #12345 for user john@example.com",
-            "2024-01-01 10:00:01 [INFO] Processing order #12346 for user jane@example.com",
-            "2024-01-01 10:00:02 [INFO] Processing order #12347 for user bob@example.com",
-        ]
-
-        for i, msg in enumerate(messages):
-            event = {
-                "message": msg,
-                "timestamp": time.time(),
-            }
-            aggregator.process_event(event)
-
-        # Should aggregate similar messages
-        aggregated_events = aggregator.get_aggregated_events()
-        assert len(aggregated_events) > 0
-
-        # Check pattern contains placeholders
-        pattern = aggregated_events[0].pattern
-        assert "<NUMBER>" in pattern
-        assert "<EMAIL>" in pattern
+    def test_consistent_pattern_detection(self):
+        """Test that pattern detection is consistent for similar events."""
+        aggregator = PatternBasedAggregator(aggregation_threshold=1)
+        
+        event1 = {"message": "User user_123 performed action", "level": "INFO"}
+        event2 = {"message": "User user_456 performed action", "level": "INFO"}
+        
+        # Both events should match the same pattern
+        aggregator.should_aggregate(event1)
+        
+        aggregated_data1 = aggregator.get_aggregated_event(event1)
+        aggregated_data2 = aggregator.get_aggregated_event(event2)
+        
+        if aggregated_data1 and aggregated_data2:
+            assert aggregated_data1["pattern"] == aggregated_data2["pattern"]

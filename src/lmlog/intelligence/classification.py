@@ -412,7 +412,7 @@ class SamplingRateCalculator:
             rate = max(rate, 0.5)
 
         if event_frequency and event_frequency > 100:
-            rate *= min(100 / event_frequency, 1.0)
+            rate *= max(0.01, min(100 / event_frequency, 1.0))
 
         if event_type in [EventType.ERROR, EventType.SECURITY]:
             rate = max(rate, 0.8)
@@ -536,7 +536,7 @@ class IntelligentEventClassifier:
                 self._event_frequencies[et] //= 2
 
     def _get_frequency(self, event_type: EventType) -> float:
-        """Get event frequency (events per second estimate)."""
+        """Get event frequency (events per second estimate, based on 60-second window)."""
         count = self._event_frequencies.get(event_type, 0)
         return count / 60.0
 
@@ -549,7 +549,7 @@ class IntelligentEventClassifier:
             if current_time - timestamp > self._cache_ttl
         ]
 
-        for k in expired[: len(expired) // 2]:
+        for k in expired:
             del self._pattern_cache[k]
 
     def get_statistics(self) -> Dict[str, Any]:
